@@ -1,7 +1,5 @@
 package com.equitycalc.model;
 
-package com.equitycalc.model;
-
 public class Card {
     public enum Suit {
         SPADES('s'), HEARTS('h'), DIAMONDS('d'), CLUBS('c');
@@ -59,6 +57,11 @@ public class Card {
         }
         this.rank = Rank.fromSymbol(card.charAt(0));
         this.suit = Suit.fromSymbol(card.charAt(1));
+    }
+
+    public Card(Rank rank, Suit suit) {
+        this.rank = rank;
+        this.suit = suit;
     }
 
     public Suit getSuit() {

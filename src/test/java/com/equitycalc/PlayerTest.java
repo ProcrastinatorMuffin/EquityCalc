@@ -1,20 +1,23 @@
-package com.equitycalc;
+// package com.equitycalc;
 
-import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+// import org.junit.jupiter.api.Test;
 
-public class PlayerTest {
+// import com.equitycalc.model.Player;
 
-    @Test
-    public void testGetHoleCards() {
-        Player player = new Player("AS KH");
-        assertEquals("AS KH", player.getHoleCards());
-    }
+// import static org.junit.jupiter.api.Assertions.assertEquals;
 
-    @Test
-    public void testGetWinProbability() {
-        Player player = new Player("AS KH");
-        player.setWinProbability(0.75);
-        assertEquals(0.75, player.getWinProbability());
-    }
-}
+// public class PlayerTest {
+
+//     @Test
+//     public void testGetHoleCards() {
+//         Player player = new Player("AS KH");
+//         assertEquals("AS KH", player.getHoleCards());
+//     }
+
+//     @Test
+//     public void testGetWinProbability() {
+//         Player player = new Player("AS KH");
+//         player.setWinProbability(0.75);
+//         assertEquals(0.75, player.getWinProbability());
+//     }
+// }

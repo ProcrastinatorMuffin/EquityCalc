@@ -29,7 +29,7 @@ public class EquityCalc {
 
         for (int i = 0; i < numPlayers; i++) {
             System.out.println("Enter hole cards for player " + (i + 1) + " (e.g., AS KH): ");
-            String holeCards = scanner.nextLine();
+            List<Card> holeCards = new ArrayList<>();
             players.add(new Player(holeCards));
         }
     }
