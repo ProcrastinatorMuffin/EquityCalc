@@ -9,12 +9,12 @@ public class Deck {
 
     public Deck() {
         cards = new ArrayList<>();
-        String[] suits = {"H", "D", "C", "S"};
-        String[] ranks = {"2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K", "A"};
+        Card.Suit[] suits = Card.Suit.values();
+        Card.Rank[] ranks = Card.Rank.values();
 
-        for (String suit : suits) {
-            for (String rank : ranks) {
-                cards.add(new Card(rank + suit));
+        for (Card.Suit suit : suits) {
+            for (Card.Rank rank : ranks) {
+                cards.add(new Card(rank, suit));
             }
         }
     }
@@ -25,16 +25,26 @@ public class Deck {
 
     public Card dealCard() {
         if (cards.isEmpty()) {
-            return null;
+            throw new IllegalStateException("No cards left in the deck");
         }
         return cards.remove(cards.size() - 1);
     }
 
     public List<Card> dealCards(int numberOfCards) {
+        if (numberOfCards > cards.size()) {
+            throw new IllegalArgumentException("Not enough cards in the deck");
+        }
         List<Card> dealtCards = new ArrayList<>();
         for (int i = 0; i < numberOfCards; i++) {
             dealtCards.add(dealCard());
         }
         return dealtCards;
+    }
+
+    @Override
+    public String toString() {
+        return "Deck{" +
+                "cards=" + cards +
+                '}';
     }
 }
