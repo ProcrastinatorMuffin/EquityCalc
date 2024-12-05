@@ -1,4 +1,4 @@
-package com.equitycalc;
+package com.equitycalc.model;
 
 public class Card {
     private String suit;

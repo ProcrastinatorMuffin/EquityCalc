@@ -1,5 +1,8 @@
 package com.equitycalc;
 
+import com.equitycalc.model.Card;
+import com.equitycalc.model.Player;
+
 import java.util.List;
 
 public class EquityCalculator {

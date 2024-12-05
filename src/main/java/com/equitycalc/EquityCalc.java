@@ -1,5 +1,10 @@
 package com.equitycalc;
 
+import com.equitycalc.model.Card;
+import com.equitycalc.model.Deck;
+import com.equitycalc.model.Hand;
+import com.equitycalc.model.Player;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;

@@ -1,4 +1,4 @@
-package com.equitycalc;
+package com.equitycalc.model;
 
 import java.util.ArrayList;
 import java.util.List;
