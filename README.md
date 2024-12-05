@@ -16,6 +16,10 @@ EquityCalc is a Poker Real-Time Equity Calculator that helps you determine the e
    ```
    npm install
    ```
+4. Set up Java:
+   - Ensure you have Java Development Kit (JDK) installed. You can download it from [Oracle's website](https://www.oracle.com/java/technologies/javase-jdk11-downloads.html).
+   - Set the `JAVA_HOME` environment variable to point to your JDK installation directory.
+   - Add the `bin` directory of your JDK installation to the `PATH` environment variable.
 
 ## Usage
 1. Run the application:
@@ -23,3 +27,13 @@ EquityCalc is a Poker Real-Time Equity Calculator that helps you determine the e
    npm start
    ```
 2. Follow the on-screen instructions to input your hand and calculate the equity.
+3. To run the Java application:
+   - Compile the Java code:
+     ```
+     javac -d bin src/main/java/com/equitycalc/*.java
+     ```
+   - Run the Java application:
+     ```
+     java -cp bin com.equitycalc.EquityCalc
+     ```
+4. Follow the on-screen instructions to input player hole cards and community cards, and to calculate and display win, loss, and split probabilities.
