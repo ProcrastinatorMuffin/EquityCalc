@@ -3,3 +3,10 @@ taarget/
 dist/
 *.class
 *.log
+*.jar
+*.war
+*.ear
+*.class
+*.exe
+*.dll
+*.lst
