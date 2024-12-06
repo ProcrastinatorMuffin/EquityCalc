@@ -1,6 +1,9 @@
 package com.equitycalc;
 
 import javax.swing.*;
+
+import com.equitycalc.model.Player;
+
 import java.awt.*;
 import java.util.List;
 

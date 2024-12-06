@@ -51,3 +51,12 @@ EquityCalc is a Poker Real-Time Equity Calculator that helps you determine the e
      mvn exec:java -Dexec.mainClass="com.equitycalc.EquityCalc"
      ```
 6. Follow the on-screen instructions to input player hole cards and community cards, and to calculate and display win, loss, and split probabilities.
+
+---
+
+# TODO: DELETE TEXT BELOW
+
+- Profile BitHandEvaluator.evaluateHand() internals
+Consider caching evaluated hands
+- Look for redundant calculations in hand ranking
+- Could use parallel processing for batch evaluations
