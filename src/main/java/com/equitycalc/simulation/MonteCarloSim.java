@@ -1,6 +1,8 @@
 package com.equitycalc.simulation;
 
 import com.equitycalc.model.*;
+import com.equitycalc.util.ProgressTracker;
+
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
@@ -16,7 +18,7 @@ public class MonteCarloSim {
     private static final String DEFAULT_LOOKUP_PATH = "resources/poker_lookup.dat";
     
     public MonteCarloSim() {
-        this.numSimulations = 500000;
+        this.numSimulations = 1000000;
         this.deck = new Deck();
         this.lookupTable = new PokerHandLookup(numSimulations);
     }
@@ -71,7 +73,6 @@ public class MonteCarloSim {
         return lookupTable.getResult(key);
     }
     
-        // In MonteCarloSim.java, modify runSimulation method:
     public void runSimulation(List<Player> players) throws InterruptedException, ExecutionException {
         long startTime = System.nanoTime();
         
@@ -80,12 +81,21 @@ public class MonteCarloSim {
         }
         
         SimulationResult result = new SimulationResult(players.size());
+        ProgressTracker progress = new ProgressTracker(numSimulations);
+
+        String heroHandKey = generateLookupKey(players.subList(0, 1));
+        progress.setCurrentHand(heroHandKey);
         
         for (int i = 0; i < numSimulations; i++) {
             long batchStartTime = System.nanoTime();
             if (i % SIMULATION_BATCH_SIZE == 0) {
                 deck.cards = new ArrayList<>(new Deck().cards);
                 PerformanceLogger.logOperation("DeckReset", batchStartTime);
+                
+                // Update progress every batch
+                progress.update(i, 
+                    result.getWinProbability(0), 
+                    result.getSplitProbability(0));
             }
             
             long handStartTime = System.nanoTime();
@@ -93,7 +103,9 @@ public class MonteCarloSim {
             PerformanceLogger.logOperation("SimulateHand", handStartTime);
         }
         
-        // Update result stats
+        progress.complete();
+        
+        // Update final results
         long resultUpdateTime = System.nanoTime();
         for (int i = 0; i < players.size(); i++) {
             Player player = players.get(i);
