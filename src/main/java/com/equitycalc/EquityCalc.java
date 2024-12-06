@@ -12,6 +12,7 @@ import java.util.Random;
 import java.util.ArrayList;
 import java.util.Scanner;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 
@@ -72,7 +73,7 @@ public class EquityCalc {
         }
     }
     
-    private static void runDebugSimulations(MonteCarloSim simulator) {
+    private static void runDebugSimulations(MonteCarloSim simulator) throws InterruptedException, ExecutionException {
         System.out.println("\n=== Testing Premium Hands ===");
         simulateHandCategory(simulator, PREMIUM_HANDS);
         
@@ -83,7 +84,7 @@ public class EquityCalc {
         simulateHandCategory(simulator, UNPLAYABLE_HANDS);
     }
     
-    private static void simulateHandCategory(MonteCarloSim simulator, List<String> hands) {
+    private static void simulateHandCategory(MonteCarloSim simulator, List<String> hands) throws InterruptedException, ExecutionException {
         for (String handKey : hands) {
             if (!simulatedHands.contains(handKey)) {
                 List<Card> heroCards = Arrays.asList(
@@ -107,7 +108,7 @@ public class EquityCalc {
         }
     }
     
-    private static void runProductionSimulations(MonteCarloSim simulator) {
+    private static void runProductionSimulations(MonteCarloSim simulator) throws InterruptedException, ExecutionException {
         while (handsSimulated < MAX_HANDS_PER_RUN) {
             List<String> remainingHands = ALL_POSSIBLE_HANDS.stream()
                 .filter(hand -> !simulatedHands.contains(hand))
@@ -162,7 +163,7 @@ public class EquityCalc {
         return hands;
     }
     
-    private static void runSimulation(MonteCarloSim simulator, List<Card> heroCards) {
+    private static void runSimulation(MonteCarloSim simulator, List<Card> heroCards) throws InterruptedException, ExecutionException {
         long startTime = System.nanoTime();
         
         Player hero = new Player(heroCards);
@@ -182,7 +183,6 @@ public class EquityCalc {
         simulator.runSimulation(players);
         printResults(players);
         
-        PerformanceLogger.logOperation("SimulationSetup", startTime);
     }
     
     private static String generateHandKey(List<Card> cards) {

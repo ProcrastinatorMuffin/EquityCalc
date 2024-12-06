@@ -4,6 +4,11 @@ import com.equitycalc.model.Card;
 import com.equitycalc.model.PokerHand;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
 
 
 
@@ -12,6 +17,10 @@ public class BitHandEvaluator {
     private static final long[] STRAIGHT_MASKS;
     private static final long[] FLUSH_MASKS;
     private static final int[] RANK_COUNT_LOOKUP;
+
+    private static final Map<Long, HandRanking> HAND_CACHE = new ConcurrentHashMap<>();
+    private static final AtomicLong cacheHits = new AtomicLong();
+    private static final AtomicLong cacheMisses = new AtomicLong();
     
     // Initialize lookup tables
     static {
@@ -19,56 +28,120 @@ public class BitHandEvaluator {
         FLUSH_MASKS = initFlushMasks();
         RANK_COUNT_LOOKUP = initRankCountLookup();
     }
+
+    private static class RankAnalysis {
+        final int[] rankCounts;
+        long rankBits;
+        final int maxCount;
+        final int pairCount;
+        
+        RankAnalysis(long cardBits) {
+            rankCounts = new int[Card.Rank.values().length];
+            rankBits = 0L;
+            
+            // Use lookup table for rank counting
+            for (int i = 0; i < 52; i += 4) { // Process 4 bits at a time
+                int rankIndex = (int)((cardBits >> i) & 0xF);
+                if (rankIndex > 0) {
+                    rankCounts[i >> 2] = RANK_COUNT_LOOKUP[rankIndex];
+                    if (rankCounts[i >> 2] > 0) {
+                        rankBits |= (1L << (i >> 2));
+                    }
+                }
+            }
+            
+            // Calculate derived values
+            int maxCount = 0;
+            int pairs = 0;
+            for (int count : rankCounts) {
+                if (count > maxCount) maxCount = count;
+                if (count == 2) pairs++;
+            }
+            this.maxCount = maxCount;
+            this.pairCount = pairs;
+        }
+    }
+
+    private static RankAnalysis analyzeRanks(long cardBits) {
+        return new RankAnalysis(cardBits);
+    }
     
     // Main evaluation methods
-    public static HandRanking evaluateHand(PokerHand hand) {
+    public static HandRanking evaluateHand(PokerHand hand) throws InterruptedException, ExecutionException {
         if (hand == null) {
             throw new IllegalArgumentException("Hand cannot be null");
         }
         
         int numCards = hand.getCardCount();
         if (numCards < 5) {
-            throw new IllegalArgumentException("Hand must contain at least 5 cards, found: " + 
-                numCards);
+            throw new IllegalArgumentException("Hand must contain at least 5 cards, found: " + numCards);
         }
         
+        // Handle 5-card hands directly
         if (numCards == 5) {
-            return evaluateFiveCardBits(hand.toBitMask());
+            long bits = hand.toBitMask();
+            HandRanking cached = HAND_CACHE.get(bits);
+            if (cached != null) {
+                cacheHits.incrementAndGet();
+                return cached;
+            }
+            return HAND_CACHE.computeIfAbsent(bits, key -> {
+                cacheMisses.incrementAndGet();
+                return evaluateFiveCardBits(key);
+            });
         }
         
-        // For 6 or 7 card hands, find best 5-card combination
         long handBits = hand.toBitMask();
-        HandRanking bestRanking = null;
+        List<Long> combinations = generateCombinations(handBits, numCards);
         
-        // Generate all 5-card combinations using bit manipulation
-        for (long subset = (1L << numCards) - 1; subset > 0; subset--) {
-            if (Long.bitCount(subset) != 5) continue;
-            
-            // Convert number to actual card bits
-            long fiveCardBits = 0L;
-            for (int i = 0; i < numCards; i++) {
-                if ((subset & (1L << i)) != 0) {
-                    // Find the i-th card in the original hand
-                    int cardIndex = 0;  // Use separate counter
-                    for (int j = 0; j < 52; j++) {
-                        if ((handBits & (1L << j)) != 0) {
-                            if (cardIndex == i) {
-                                fiveCardBits |= 1L << j;
-                                break;
-                            }
-                            cardIndex++;
-                        }
-                    }
+        // Single parallel stream with work stealing
+        return combinations.parallelStream()
+            .map(bits -> {
+                HandRanking cached = HAND_CACHE.get(bits);
+                if (cached != null) {
+                    cacheHits.incrementAndGet();
+                    return cached;
                 }
-            }
-            
-            HandRanking ranking = evaluateFiveCardBits(fiveCardBits);
-            if (bestRanking == null || ranking.compareTo(bestRanking) > 0) {
-                bestRanking = ranking;
+                return HAND_CACHE.computeIfAbsent(bits, key -> {
+                    cacheMisses.incrementAndGet();
+                    return evaluateFiveCardBits(key);
+                });
+            })
+            .max(HandRanking::compareTo)
+            .orElseThrow(() -> new IllegalStateException("No valid combinations"));
+    }
+
+    private static List<Long> generateCombinations(long handBits, int numCards) {
+        List<Long> combinations = new ArrayList<>();
+        // Pre-calculate all combinations
+        int[] cardIndices = new int[numCards];
+        int idx = 0;
+        for (int i = 0; i < 52; i++) {
+            if ((handBits & (1L << i)) != 0) {
+                cardIndices[idx++] = i;
             }
         }
         
-        return bestRanking;
+        // Generate 5-card combinations
+        combinationsHelper(cardIndices, 5, 0, new int[5], 0, combinations, handBits);
+        return combinations;
+    }
+    
+    private static void combinationsHelper(int[] cards, int r, int start, int[] temp, int tempIndex,
+                                         List<Long> result, long handBits) {
+        if (tempIndex == r) {
+            long combination = 0L;
+            for (int i = 0; i < r; i++) {
+                combination |= 1L << temp[i];
+            }
+            result.add(combination);
+            return;
+        }
+        
+        for (int i = start; i <= cards.length - r + tempIndex; i++) {
+            temp[tempIndex] = cards[i];
+            combinationsHelper(cards, r, i + 1, temp, tempIndex + 1, result, handBits);
+        }
     }
     
     private static HandRanking evaluateFiveCardBits(long cardBits) {
@@ -255,65 +328,14 @@ public class BitHandEvaluator {
     }
     
     private static boolean isFourOfAKind(long cardBits) {
-        if (Card.countCards(cardBits) != 5) {
-            return false;
-        }
-        
-        int[] rankCounts = new int[Card.Rank.values().length];
-        
-        // Count ranks using bit manipulation
-        for (int i = 0; i < 52; i++) {
-            if ((cardBits & (1L << i)) != 0) {
-                // Extract rank from bit position
-                int rank = (i >> Card.SUIT_BITS) & ((1 << Card.RANK_BITS) - 1);
-                rankCounts[rank]++;
-            }
-        }
-        
-        // Check for exactly 4 of any rank
-        for (int count : rankCounts) {
-            if (count == 4) {
-                return true;
-            }
-        }
-        
-        return false;
+        if (Card.countCards(cardBits) != 5) return false;
+        return analyzeRanks(cardBits).maxCount == 4;
     }
     
     private static boolean isFullHouse(long cardBits) {
-        if (Card.countCards(cardBits) != 5) {
-            return false;
-        }
-        
-        int[] rankCounts = new int[Card.Rank.values().length];
-        
-        // Count ranks using bit manipulation
-        for (int i = 0; i < 52; i++) {
-            if ((cardBits & (1L << i)) != 0) {
-                int rank = (i >> Card.SUIT_BITS) & ((1 << Card.RANK_BITS) - 1);
-                rankCounts[rank]++;
-            }
-        }
-        
-        boolean hasTrips = false;
-        boolean hasPair = false;
-        
-        // Look for three of a kind and 2 pairs
-        for (int count : rankCounts) {
-            if (count == 3) {
-                if (hasTrips) {
-                    return false; // Can't have two sets of trips
-                }
-                hasTrips = true;
-            } else if (count == 2) {
-                if (hasPair) {
-                    return false; // Can't have two pairs
-                }
-                hasPair = true;
-            }
-        }
-        
-        return hasTrips && hasPair;
+        if (Card.countCards(cardBits) != 5) return false;
+        RankAnalysis analysis = analyzeRanks(cardBits);
+        return analysis.maxCount == 3 && analysis.pairCount == 1;
     }
     
     private static boolean isFlush(long cardBits) {
@@ -370,88 +392,20 @@ public class BitHandEvaluator {
     }
 
     private static boolean isThreeOfAKind(long cardBits) {
-        if (Card.countCards(cardBits) != 5) {
-            return false;
-        }
-        
-        int[] rankCounts = new int[Card.Rank.values().length];
-        
-        // Count ranks using bit manipulation
-        for (int i = 0; i < 52; i++) {
-            if ((cardBits & (1L << i)) != 0) {
-                int rank = (i >> Card.SUIT_BITS) & ((1 << Card.RANK_BITS) - 1);
-                rankCounts[rank]++;
-            }
-        }
-        
-        // Look for exactly one three-of-a-kind
-        boolean foundTrips = false;
-        for (int count : rankCounts) {
-            if (count == 3) {
-                if (foundTrips) {
-                    return false; // Can't have two sets of trips
-                }
-                foundTrips = true;
-            } else if (count > 1) {
-                return false; // Can't have pairs or four-of-a-kind
-            }
-        }
-        
-        return foundTrips;
+        if (Card.countCards(cardBits) != 5) return false;
+        RankAnalysis analysis = analyzeRanks(cardBits);
+        return analysis.maxCount == 3 && analysis.pairCount == 0;
     }
 
     private static boolean isTwoPair(long cardBits) {
-        if (Card.countCards(cardBits) != 5) {
-            return false;
-        }
-        
-        int[] rankCounts = new int[Card.Rank.values().length];
-        
-        // Count ranks
-        for (int i = 0; i < 52; i++) {
-            if ((cardBits & (1L << i)) != 0) {
-                int rank = (i >> Card.SUIT_BITS) & ((1 << Card.RANK_BITS) - 1);
-                rankCounts[rank]++;
-            }
-        }
-        
-        // Count number of pairs
-        int pairCount = 0;
-        for (int count : rankCounts) {
-            if (count == 2) {
-                pairCount++;
-            }
-        }
-        
-        return pairCount == 2;
+        if (Card.countCards(cardBits) != 5) return false;
+        return analyzeRanks(cardBits).pairCount == 2;
     }
-    
+
     private static boolean isOnePair(long cardBits) {
-        if (Card.countCards(cardBits) != 5) {
-            return false;
-        }
-        
-        int[] rankCounts = new int[Card.Rank.values().length];
-        
-        // Count ranks
-        for (int i = 0; i < 52; i++) {
-            if ((cardBits & (1L << i)) != 0) {
-                int rank = (i >> Card.SUIT_BITS) & ((1 << Card.RANK_BITS) - 1);
-                rankCounts[rank]++;
-            }
-        }
-        
-        // Count pairs and verify no three-of-a-kind or four-of-a-kind
-        int pairCount = 0;
-        for (int count : rankCounts) {
-            if (count == 2) {
-                pairCount++;
-            } else if (count > 2) {
-                return false;
-            }
-        }
-        
-        return pairCount == 1;
+        if (Card.countCards(cardBits) != 5) return false;
+        RankAnalysis analysis = analyzeRanks(cardBits);
+        return analysis.pairCount == 1 && analysis.maxCount == 2;
     }
     
     // Rank extraction helpers

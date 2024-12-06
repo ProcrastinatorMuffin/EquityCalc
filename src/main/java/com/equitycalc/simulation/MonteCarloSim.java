@@ -3,6 +3,7 @@ package com.equitycalc.simulation;
 import com.equitycalc.model.*;
 import java.io.*;
 import java.util.*;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 public class MonteCarloSim {
@@ -15,7 +16,7 @@ public class MonteCarloSim {
     private static final String DEFAULT_LOOKUP_PATH = "resources/poker_lookup.dat";
     
     public MonteCarloSim() {
-        this.numSimulations = 100000;
+        this.numSimulations = 500000;
         this.deck = new Deck();
         this.lookupTable = new PokerHandLookup(numSimulations);
     }
@@ -70,7 +71,8 @@ public class MonteCarloSim {
         return lookupTable.getResult(key);
     }
     
-    public void runSimulation(List<Player> players) {
+        // In MonteCarloSim.java, modify runSimulation method:
+    public void runSimulation(List<Player> players) throws InterruptedException, ExecutionException {
         long startTime = System.nanoTime();
         
         if (players.size() > MAX_PLAYERS) {
@@ -80,8 +82,10 @@ public class MonteCarloSim {
         SimulationResult result = new SimulationResult(players.size());
         
         for (int i = 0; i < numSimulations; i++) {
+            long batchStartTime = System.nanoTime();
             if (i % SIMULATION_BATCH_SIZE == 0) {
                 deck.cards = new ArrayList<>(new Deck().cards);
+                PerformanceLogger.logOperation("DeckReset", batchStartTime);
             }
             
             long handStartTime = System.nanoTime();
@@ -89,23 +93,28 @@ public class MonteCarloSim {
             PerformanceLogger.logOperation("SimulateHand", handStartTime);
         }
         
-        // Update player probabilities
+        // Update result stats
+        long resultUpdateTime = System.nanoTime();
         for (int i = 0; i < players.size(); i++) {
             Player player = players.get(i);
             player.setWinProbability(result.getWinProbability(i));
             player.setLossProbability(result.getLossProbability(i));
             player.setSplitProbability(result.getSplitProbability(i));
         }
+        PerformanceLogger.logOperation("ResultUpdate", resultUpdateTime);
         
         // Store in lookup table
+        long lookupTime = System.nanoTime();
         String key = generateLookupKey(players);
         lookupTable.addResult(key, result);
+        PerformanceLogger.logOperation("LookupTableAdd", lookupTime);
         
         PerformanceLogger.logOperation("FullSimulation", startTime);
     }
     
-    private void simulateOneHand(List<Player> players, SimulationResult result) {
-        // Create new deck for each hand
+    // Modify simulateOneHand method:
+    private void simulateOneHand(List<Player> players, SimulationResult result) throws InterruptedException, ExecutionException {
+        long deckPrepTime = System.nanoTime();
         deck.cards = new ArrayList<>(new Deck().cards);
         
         // Remove hole cards from deck
@@ -114,68 +123,66 @@ public class MonteCarloSim {
             usedCards.addAll(player.getHoleCards());
         }
         deck.cards.removeAll(usedCards);
+        PerformanceLogger.logOperation("DeckPreparation", deckPrepTime);
         
+        long shuffleTime = System.nanoTime();
         deck.shuffle();
+        PerformanceLogger.logOperation("DeckShuffle", shuffleTime);
         
-        // Deal community cards from remaining deck
+        long dealTime = System.nanoTime();
         List<Card> communityCards = deck.dealCards(5);
+        PerformanceLogger.logOperation("DealCommunityCards", dealTime);
         
-        // Create and evaluate hands
+        long handCreateTime = System.nanoTime();
         List<PokerHand> hands = new ArrayList<>();
         for (Player player : players) {
             PokerHand hand = new PokerHand();
-            // Add hole cards
             for (Card card : player.getHoleCards()) {
                 hand.addCard(card);
             }
-            // Add community cards
             for (Card card : communityCards) {
                 hand.addCard(card);
             }
             
-            // Validate hand has exactly 5 cards
             if (hand.getCardCount() != 7) {
                 throw new IllegalStateException(
-                    String.format("Invalid hand size: %d cards. Player: %s, Hole cards: %s, Community cards: %s",
-                        hand.getCardCount(),
-                        player,
-                        player.getHoleCards(),
-                        communityCards
-                    )
+                    String.format("Invalid hand size: %d cards", hand.getCardCount())
                 );
             }
-            
             hands.add(hand);
         }
+        PerformanceLogger.logOperation("HandCreation", handCreateTime);
         
+        long evalTime = System.nanoTime();
         evaluateHandsAndUpdateResults(hands, result);
+        PerformanceLogger.logOperation("HandEvaluation", evalTime);
     }
     
-    private void evaluateHandsAndUpdateResults(List<PokerHand> hands, SimulationResult result) {
+    // Modify evaluateHandsAndUpdateResults method:
+    private void evaluateHandsAndUpdateResults(List<PokerHand> hands, SimulationResult result) throws InterruptedException, ExecutionException {
+        long rankingTime = System.nanoTime();
         List<HandRanking> rankings = new ArrayList<>();
         
-        // Use BitHandEvaluator instead of HandEvaluator
         for (PokerHand hand : hands) {
             rankings.add(BitHandEvaluator.evaluateHand(hand));
         }
+        PerformanceLogger.logOperation("HandRanking", rankingTime);
         
-        // Find best hand(s)
+        long compareTime = System.nanoTime();
         HandRanking bestRanking = Collections.max(rankings);
         List<Integer> winners = new ArrayList<>();
         
-        // Find all players with the best hand (for split pots)
         for (int i = 0; i < rankings.size(); i++) {
-            int comparison = rankings.get(i).compareTo(bestRanking);
-            if (comparison == 0) {
+            if (rankings.get(i).compareTo(bestRanking) == 0) {
                 winners.add(i);
             }
         }
-    
+        PerformanceLogger.logOperation("WinnerDetermination", compareTime);
+        
+        long statsTime = System.nanoTime();
         result.incrementTotalHands();
-    
-        // Update statistics
+        
         if (winners.size() == 1) {
-            // Single winner
             int winner = winners.get(0);
             result.incrementWin(winner);
             for (int i = 0; i < rankings.size(); i++) {
@@ -184,7 +191,6 @@ public class MonteCarloSim {
                 }
             }
         } else {
-            // Split pot
             for (int winner : winners) {
                 result.incrementSplit(winner);
             }
@@ -194,6 +200,7 @@ public class MonteCarloSim {
                 }
             }
         }
+        PerformanceLogger.logOperation("StatsUpdate", statsTime);
     }
     
 }

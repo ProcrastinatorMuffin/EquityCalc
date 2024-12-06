@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 public class BitHandEvaluatorTest {
     
@@ -40,7 +41,7 @@ public class BitHandEvaluatorTest {
     }
     
     @Test
-    void testRoyalFlush() {
+    void testRoyalFlush() throws InterruptedException, ExecutionException {
         HandRanking ranking = BitHandEvaluator.evaluateHand(
             hand("AS", "KS", "QS", "JS", "TS"));
         assertEquals(HandRanking.Type.STRAIGHT_FLUSH, ranking.type);
@@ -48,7 +49,7 @@ public class BitHandEvaluatorTest {
     }
     
     @Test
-    void testStraightFlush() {
+    void testStraightFlush() throws InterruptedException, ExecutionException {
         HandRanking ranking = BitHandEvaluator.evaluateHand(
             hand("9H", "8H", "7H", "6H", "5H"));
         assertEquals(HandRanking.Type.STRAIGHT_FLUSH, ranking.type);
@@ -56,7 +57,7 @@ public class BitHandEvaluatorTest {
     }
     
     @Test
-    void testFourOfAKind() {
+    void testFourOfAKind() throws InterruptedException, ExecutionException {
         HandRanking ranking = BitHandEvaluator.evaluateHand(
             hand("AS", "AH", "AD", "AC", "KS"));
         assertEquals(HandRanking.Type.FOUR_OF_A_KIND, ranking.type);
@@ -65,7 +66,7 @@ public class BitHandEvaluatorTest {
     }
     
     @Test
-    void testFullHouse() {
+    void testFullHouse() throws InterruptedException, ExecutionException {
         HandRanking ranking = BitHandEvaluator.evaluateHand(
             hand("AS", "AH", "AD", "KS", "KH"));
         assertEquals(HandRanking.Type.FULL_HOUSE, ranking.type);
@@ -74,7 +75,7 @@ public class BitHandEvaluatorTest {
     }
     
     @Test
-    void testFlush() {
+    void testFlush() throws InterruptedException, ExecutionException {
         HandRanking ranking = BitHandEvaluator.evaluateHand(
             hand("AS", "KS", "9S", "7S", "2S"));
         assertEquals(HandRanking.Type.FLUSH, ranking.type);
@@ -86,7 +87,7 @@ public class BitHandEvaluatorTest {
     }
     
     @Test
-    void testStraight() {
+    void testStraight() throws InterruptedException, ExecutionException {
         HandRanking ranking = BitHandEvaluator.evaluateHand(
             hand("AS", "KH", "QD", "JC", "TS"));
         assertEquals(HandRanking.Type.STRAIGHT, ranking.type);
@@ -94,7 +95,7 @@ public class BitHandEvaluatorTest {
     }
     
     @Test
-    void testThreeOfAKind() {
+    void testThreeOfAKind() throws InterruptedException, ExecutionException {
         HandRanking ranking = BitHandEvaluator.evaluateHand(
             hand("AS", "AH", "AD", "KS", "QH"));
         assertEquals(HandRanking.Type.THREE_OF_A_KIND, ranking.type);
@@ -104,7 +105,7 @@ public class BitHandEvaluatorTest {
     }
     
     @Test
-    void testTwoPair() {
+    void testTwoPair() throws InterruptedException, ExecutionException {
         HandRanking ranking = BitHandEvaluator.evaluateHand(
             hand("AS", "AH", "KS", "KH", "QS"));
         assertEquals(HandRanking.Type.TWO_PAIR, ranking.type);
@@ -114,7 +115,7 @@ public class BitHandEvaluatorTest {
     }
     
     @Test
-    void testOnePair() {
+    void testOnePair() throws InterruptedException, ExecutionException {
         HandRanking ranking = BitHandEvaluator.evaluateHand(
             hand("AS", "AH", "KS", "QH", "JD"));
         assertEquals(HandRanking.Type.ONE_PAIR, ranking.type);
@@ -126,7 +127,7 @@ public class BitHandEvaluatorTest {
     }
     
     @Test
-    void testHighCard() {
+    void testHighCard() throws InterruptedException, ExecutionException {
         HandRanking ranking = BitHandEvaluator.evaluateHand(
             hand("AS", "KH", "QD", "JC", "9S"));
         assertEquals(HandRanking.Type.HIGH_CARD, ranking.type);
@@ -156,7 +157,7 @@ public class BitHandEvaluatorTest {
     }
     
     @Test
-    void testHandComparison() {
+    void testHandComparison() throws InterruptedException, ExecutionException {
         HandRanking royalFlush = BitHandEvaluator.evaluateHand(
             hand("AS", "KS", "QS", "JS", "TS"));
         HandRanking straightFlush = BitHandEvaluator.evaluateHand(

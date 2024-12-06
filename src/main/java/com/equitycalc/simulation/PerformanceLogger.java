@@ -78,7 +78,7 @@ public class PerformanceLogger {
         }
         
         // Print to console and write to file
-        System.out.print(stats.toString());
+        // System.out.print(stats.toString());
         writeToLog(stats.toString());
     }
     
