@@ -5,12 +5,16 @@ public class ProgressTracker {
     private int current;
     private final int barWidth = 50;
     private long startTime;
-    private static final String ANSI_CLEAR_LINE = "\u001B[1A\u001B[2K";
     
     // ANSI colors
-    private static final String ANSI_RED = "\u001B[31m";
-    private static final String ANSI_BLACK = "\u001B[30m";
+    private static final String ANSI_RED = "\u001B[38;5;167m";     // Red suit
+    private static final String ANSI_ORANGE = "\u001B[38;5;214m";  // Diamond suit
+    private static final String ANSI_GREEN = "\u001B[38;5;142m";   // Club suit
+    private static final String ANSI_BLUE = "\u001B[38;5;109m";    // Spade suit
     private static final String ANSI_RESET = "\u001B[0m";
+    private static final String ANSI_BG_DARK = "\033[48;2;40;40;40m";  // Dark background for cards
+
+
     
     // Updated card template (13 chars wide x 9 lines tall)
     private static final String[] CARD_TOP =    {"┌───────────┐ "};
@@ -25,6 +29,16 @@ public class ProgressTracker {
     // Big suit symbols (larger Unicode variants)
     private static final String[] BIG_SUITS = {"♥", "♦", "♣", "♠"};
     private static final String[] SMALL_SUITS = {"♥", "♦", "♣", "♠"};
+
+    // ANSI control sequences
+    private static final String ANSI_CLEAR_LINE = "\033[2K"; // Clear entire line
+    private static final String ANSI_UP = "\033[1A";         // Move cursor up
+    private static final String ANSI_HOME = "\033[H";        // Move to top
+    private static final String ANSI_SAVE = "\033[s";        // Save cursor position
+    private static final String ANSI_RESTORE = "\033[u";     // Restore cursor position
+    
+    private boolean isFirstUpdate = true;
+    private int lastLineCount = 0;
     
     private String currentHandDisplay = "";
 
@@ -60,21 +74,29 @@ public class ProgressTracker {
     }
 
     private void addCardToVisual(StringBuilder[] lines, String rank, String suit) {
-        String color = suit.equals("h") || suit.equals("d") ? ANSI_RED : ANSI_BLACK;
+        String color = switch (suit) {
+            case "h" -> ANSI_RED;
+            case "d" -> ANSI_ORANGE;
+            case "c" -> ANSI_GREEN;
+            case "s" -> ANSI_BLUE;
+            default -> ANSI_RESET;
+        };
+        
         String bigSuit = getBigSuitSymbol(suit);
         String smallSuit = getSmallSuitSymbol(suit);
         String formattedRank = formatRank(rank);
         String upsideDownRank = getUpsideDownRank(formattedRank);
         
-        lines[0].append(color).append(CARD_TOP[0]).append(ANSI_RESET);
-        lines[1].append(color).append(String.format(CARD_TOP_LINE[0], formattedRank)).append(ANSI_RESET);
-        lines[2].append(color).append(String.format(CARD_TOP_SUIT[0], smallSuit)).append(ANSI_RESET);
-        lines[3].append(color).append(CARD_EMPTY[0]).append(ANSI_RESET);
-        lines[4].append(color).append(String.format(CARD_CENTER[0], bigSuit)).append(ANSI_RESET);
-        lines[5].append(color).append(CARD_EMPTY[0]).append(ANSI_RESET);
-        lines[6].append(color).append(String.format(CARD_BOT_SUIT[0], smallSuit)).append(ANSI_RESET);
-        lines[7].append(color).append(String.format(CARD_BOT_LINE[0], upsideDownRank)).append(ANSI_RESET);
-        lines[8].append(color).append(CARD_BOTTOM[0]).append(ANSI_RESET);
+        // Replace ANSI_BG_WHITE with ANSI_BG_DARK in all lines
+        lines[0].append(ANSI_BG_DARK).append(color).append(CARD_TOP[0]).append(ANSI_RESET);
+        lines[1].append(ANSI_BG_DARK).append(color).append(String.format(CARD_TOP_LINE[0], formattedRank)).append(ANSI_RESET);
+        lines[2].append(ANSI_BG_DARK).append(color).append(String.format(CARD_TOP_SUIT[0], smallSuit)).append(ANSI_RESET);
+        lines[3].append(ANSI_BG_DARK).append(color).append(CARD_EMPTY[0]).append(ANSI_RESET);
+        lines[4].append(ANSI_BG_DARK).append(color).append(String.format(CARD_CENTER[0], bigSuit)).append(ANSI_RESET);
+        lines[5].append(ANSI_BG_DARK).append(color).append(CARD_EMPTY[0]).append(ANSI_RESET);
+        lines[6].append(ANSI_BG_DARK).append(color).append(String.format(CARD_BOT_SUIT[0], smallSuit)).append(ANSI_RESET);
+        lines[7].append(ANSI_BG_DARK).append(color).append(String.format(CARD_BOT_LINE[0], upsideDownRank)).append(ANSI_RESET);
+        lines[8].append(ANSI_BG_DARK).append(color).append(CARD_BOTTOM[0]).append(ANSI_RESET);
     }
 
     private String getBigSuitSymbol(String suit) {
@@ -133,29 +155,45 @@ public class ProgressTracker {
         long elapsed = System.currentTimeMillis() - startTime;
         long eta = (elapsed * (total - current)) / (current > 0 ? current : 1);
 
-        // Clear previous lines
-        for (int i = 0; i < 12; i++) { // Increased to accommodate card display
-            System.out.print(ANSI_CLEAR_LINE);
-            System.out.print("\033[1A");
+        // Build the entire output first
+        StringBuilder output = new StringBuilder();
+        
+        // Clear previous output if not first update
+        if (!isFirstUpdate) {
+            for (int i = 0; i < lastLineCount; i++) {
+                output.append(ANSI_UP).append(ANSI_CLEAR_LINE);
+            }
         }
         
-        // Print current hand
-        System.out.print(currentHandDisplay);
+        // Add current hand display
+        String[] handLines = currentHandDisplay.split("\n");
+        for (String line : handLines) {
+            output.append(line).append("\n");
+        }
         
-        // Print progress bar
-        System.out.printf("\nProgress: [%-" + barWidth + "s] %d%%", 
-            "=".repeat(bars), percentage);
+        // Add progress bar
+        output.append(String.format("Progress: [%-" + barWidth + "s] %d%%\n", 
+            "=".repeat(bars), percentage));
         
-        // Print stats
-        System.out.printf("\nSimulations: %d/%d | Win: %.2f%% | Split: %.2f%%",
-            current, total, winRate * 100, splitRate * 100);
+        // Add stats
+        output.append(String.format("Simulations: %d/%d | Win: %.2f%% | Split: %.2f%%\n",
+            current, total, winRate * 100, splitRate * 100));
             
-        // Print time estimates
-        System.out.printf("\nElapsed: %.1fs | ETA: %.1fs", 
-            elapsed/1000.0, eta/1000.0);
+        // Add time estimates
+        output.append(String.format("Elapsed: %.1fs | ETA: %.1fs\n", 
+            elapsed/1000.0, eta/1000.0));
+
+        // Calculate number of lines for next update
+        lastLineCount = output.toString().split("\n").length;
+        
+        // Print the output
+        System.out.print(output);
+        
+        isFirstUpdate = false;
     }
 
     public void complete() {
-        System.out.println("\nSimulation complete!");
+        // Move to new line and print completion message
+        System.out.println("\n" + ANSI_CLEAR_LINE + "Simulation complete!");
     }
 }
