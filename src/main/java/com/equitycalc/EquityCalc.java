@@ -17,7 +17,7 @@ import java.util.stream.Collectors;
 
 public class EquityCalc {
     private static final boolean DEBUG_MODE = true;
-    private static final int NUM_OPPONENTS = 1;
+    private static final int NUM_OPPONENTS = 3;
     private static final int MAX_HANDS_PER_RUN = 100;
     private static Set<String> simulatedHands = new HashSet<>();
     private static int handsSimulated = 0;

@@ -30,12 +30,9 @@ public class HandTest {
     }
 
     @Test
-    void throwsOnAddingMoreThanFiveCards() {
+    void throwsOnAddingMoreThanTwoCards() {
         hand.addCard(new Card("As"));
         hand.addCard(new Card("Ks"));
-        hand.addCard(new Card("Qs"));
-        hand.addCard(new Card("Js"));
-        hand.addCard(new Card("Ts"));
         
         assertThrows(IllegalStateException.class, () -> 
             hand.addCard(new Card("9s")));
@@ -95,5 +92,86 @@ public class HandTest {
         hand2.addCard(new Card("As"));
         
         assertEquals(hand1.hashCode(), hand2.hashCode());
+    }
+
+    @Test
+    void bitMaskIsInitiallyEmpty() {
+        assertEquals(0L, hand.toBitMask());
+    }
+
+    @Test
+    void bitMaskIsUpdatedOnAddCard() {
+        Card card = new Card("As");
+        hand.addCard(card);
+        assertTrue(Card.isBitSet(hand.toBitMask(), card));
+    }
+
+    @Test
+    void fromBitMaskCreatesCorrectHand() {
+        Card card1 = new Card("As");
+        Card card2 = new Card("Kh");
+        hand.addCard(card1);
+        hand.addCard(card2);
+        
+        long mask = hand.toBitMask();
+        Hand newHand = Hand.fromBitMask(mask);
+        
+        assertEquals(hand, newHand);
+        assertEquals(2, newHand.getCardCount());
+        assertTrue(newHand.containsCard(card1));
+        assertTrue(newHand.containsCard(card2));
+    }
+
+    @Test
+    void fromBitMaskThrowsOnTooManyCards() {
+        Deck deck = new Deck();
+        assertThrows(IllegalArgumentException.class, () -> 
+            Hand.fromBitMask(deck.toBitMask()));
+    }
+
+    @Test
+    void getCardCountMatchesBitCount() {
+        assertEquals(0, hand.getCardCount());
+        hand.addCard(new Card("As"));
+        assertEquals(1, hand.getCardCount());
+        hand.addCard(new Card("Kh"));
+        assertEquals(2, hand.getCardCount());
+    }
+
+    @Test
+    void clearResetsHandAndBitMask() {
+        hand.addCard(new Card("As"));
+        hand.addCard(new Card("Kh"));
+        hand.clear();
+        
+        assertEquals(0, hand.getCardCount());
+        assertEquals(0L, hand.toBitMask());
+        assertTrue(hand.getCards().isEmpty());
+    }
+
+    @Test
+    void containsCardMatchesBitMask() {
+        Card card = new Card("As");
+        assertFalse(hand.containsCard(card));
+        hand.addCard(card);
+        assertTrue(hand.containsCard(card));
+        hand.removeCard(card);
+        assertFalse(hand.containsCard(card));
+    }
+
+    @Test
+    void bitMaskConsistencyAfterOperations() {
+        Card card1 = new Card("As");
+        Card card2 = new Card("Kh");
+        
+        hand.addCard(card1);
+        hand.addCard(card2);
+        long expectedMask = hand.toBitMask();
+        
+        hand.removeCard(card1);
+        hand.addCard(card1);
+        
+        assertEquals(expectedMask, hand.toBitMask());
+        assertEquals(2, hand.getCardCount());
     }
 }

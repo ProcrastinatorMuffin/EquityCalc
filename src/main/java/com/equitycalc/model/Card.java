@@ -1,6 +1,8 @@
 package com.equitycalc.model;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 
 public class Card implements Comparable<Card> {
     public enum Suit {
@@ -53,17 +55,78 @@ public class Card implements Comparable<Card> {
     private final Suit suit;
     private final Rank rank;
 
-    public Card(String card) {
-        if (card == null || card.length() < 2) {
-            throw new IllegalArgumentException("Invalid card format: " + card);
-        }
-        this.rank = Rank.fromSymbol(card.charAt(0));
-        this.suit = Suit.fromSymbol(card.charAt(1));
-    }
+    // Bit representation constants
+    public static final int SUIT_BITS = 2;  // 2 bits for suit (0-3)
+    public static final int RANK_BITS = 4;  // 4 bits for rank (2-14)
+    private static final int SUIT_MASK = (1 << SUIT_BITS) - 1;
+    private static final int RANK_MASK = (1 << RANK_BITS) - 1;
+    
+    // Cache bit representation
+    private final int bitValue;
 
     public Card(Rank rank, Suit suit) {
         this.rank = rank;
         this.suit = suit;
+        this.bitValue = toBits(rank, suit);
+    }
+
+    // String constructor matches common poker notation
+    public Card(String card) {
+        if (card == null || card.length() != 2) {
+            throw new IllegalArgumentException("Invalid card format. Must be rank+suit (e.g., 'As', 'Kh', '2c')");
+        }
+        this.rank = Rank.fromSymbol(Character.toUpperCase(card.charAt(0)));
+        this.suit = Suit.fromSymbol(Character.toLowerCase(card.charAt(1)));
+        this.bitValue = toBits(rank, suit);
+    }
+
+    private static int toBits(Rank rank, Suit suit) {
+        // Put suit in lower bits, rank in upper bits for better organization
+        return (suit.ordinal()) | (rank.ordinal() << SUIT_BITS);
+    }
+
+    public int toBits() {
+        return bitValue;
+    }
+
+    // Create card from bits
+    public static Card fromBits(int bits) {
+        int suitOrdinal = bits & SUIT_MASK;
+        int rankOrdinal = (bits >> SUIT_BITS) & RANK_MASK;
+        return new Card(Rank.values()[rankOrdinal], Suit.values()[suitOrdinal]);
+    }
+    
+    // Utility methods for bit operations
+    public static long cardToBitMask(Card card) {
+        return 1L << card.toBits();
+    }
+    
+    public static boolean isBitSet(long bitMask, Card card) {
+        return (bitMask & cardToBitMask(card)) != 0;
+    }
+    
+    public static long addCardToBitMask(long bitMask, Card card) {
+        return bitMask | cardToBitMask(card);
+    }
+    
+    public static long removeCardFromBitMask(long bitMask, Card card) {
+        return bitMask & ~cardToBitMask(card);
+    }
+    
+    // Count bits set in a mask
+    public static int countCards(long bitMask) {
+        return Long.bitCount(bitMask);
+    }
+    
+    // Convert bit mask to card list
+    public static List<Card> bitsToCards(long bitMask) {
+        List<Card> cards = new ArrayList<>();
+        for (int i = 0; i < 52; i++) {
+            if ((bitMask & (1L << i)) != 0) {
+                cards.add(fromBits(i));
+            }
+        }
+        return cards;
     }
 
     public Suit getSuit() {
@@ -76,7 +139,7 @@ public class Card implements Comparable<Card> {
 
     @Override
     public String toString() {
-        return rank.getSymbol() + String.valueOf(suit.getSymbol());
+        return String.valueOf(rank.getSymbol()) + suit.getSymbol();
     }
 
     @Override

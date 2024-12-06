@@ -12,10 +12,10 @@ public class MonteCarloSim {
     private final Deck deck;
     private final int numSimulations;
     private PokerHandLookup lookupTable;
-    private static final String DEFAULT_LOOKUP_PATH = "poker_lookup.dat";
+    private static final String DEFAULT_LOOKUP_PATH = "resources/poker_lookup.dat";
     
     public MonteCarloSim() {
-        this.numSimulations = 10000;
+        this.numSimulations = 100000;
         this.deck = new Deck();
         this.lookupTable = new PokerHandLookup(numSimulations);
     }
@@ -132,6 +132,19 @@ public class MonteCarloSim {
             for (Card card : communityCards) {
                 hand.addCard(card);
             }
+            
+            // Validate hand has exactly 5 cards
+            if (hand.getCardCount() != 7) {
+                throw new IllegalStateException(
+                    String.format("Invalid hand size: %d cards. Player: %s, Hole cards: %s, Community cards: %s",
+                        hand.getCardCount(),
+                        player,
+                        player.getHoleCards(),
+                        communityCards
+                    )
+                );
+            }
+            
             hands.add(hand);
         }
         
@@ -141,9 +154,9 @@ public class MonteCarloSim {
     private void evaluateHandsAndUpdateResults(List<PokerHand> hands, SimulationResult result) {
         List<HandRanking> rankings = new ArrayList<>();
         
-        // Evaluate each hand
+        // Use BitHandEvaluator instead of HandEvaluator
         for (PokerHand hand : hands) {
-            rankings.add(HandEvaluator.evaluateHand(hand));
+            rankings.add(BitHandEvaluator.evaluateHand(hand));
         }
         
         // Find best hand(s)
@@ -157,7 +170,9 @@ public class MonteCarloSim {
                 winners.add(i);
             }
         }
+    
         result.incrementTotalHands();
+    
         // Update statistics
         if (winners.size() == 1) {
             // Single winner
@@ -181,16 +196,4 @@ public class MonteCarloSim {
         }
     }
     
-}
-
-enum HandType {
-    HIGH_CARD,
-    ONE_PAIR,
-    TWO_PAIR, 
-    THREE_OF_A_KIND,
-    STRAIGHT,
-    FLUSH,
-    FULL_HOUSE,
-    FOUR_OF_A_KIND,
-    STRAIGHT_FLUSH
 }

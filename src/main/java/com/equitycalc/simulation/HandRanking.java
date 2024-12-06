@@ -5,10 +5,22 @@ import java.util.List;
 
 
 public class HandRanking implements Comparable<HandRanking> {
-    private final HandType type;
-    private final List<Card.Rank> tiebreakers;
+    public enum Type {
+        HIGH_CARD,
+        ONE_PAIR,
+        TWO_PAIR,
+        THREE_OF_A_KIND,
+        STRAIGHT,
+        FLUSH,
+        FULL_HOUSE,
+        FOUR_OF_A_KIND,
+        STRAIGHT_FLUSH
+    }
+
+    public final Type type;
+    public final List<Card.Rank> tiebreakers;
     
-    public HandRanking(HandType type, List<Card.Rank> tiebreakers) {
+    public HandRanking(Type type, List<Card.Rank> tiebreakers) {
         this.type = type;
         this.tiebreakers = tiebreakers;
     }

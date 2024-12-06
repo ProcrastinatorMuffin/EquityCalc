@@ -13,3 +13,6 @@ dist/
 *.bin
 *.json
 *.csv
+*.dat
+poker_lookup.dat
+resources/
