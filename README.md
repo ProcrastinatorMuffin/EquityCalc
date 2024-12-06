@@ -1,8 +1,5 @@
 # Poker Equity Calculator
 
-[![Build Status](https://github.com/procrastinatormuffin/poker-equity-calc/actions/workflows/build.yml/badge.svg)](https://github.com/procrastinatormuffin/poker-equity-calc/actions)
-[![Coverage](https://codecov.io/gh/procrastinatormuffin/poker-equity-calc/branch/main/graph/badge.svg)](https://codecov.io/gh/procrastinatormuffin/poker-equity-calc)
-
 Fast and accurate poker hand equity calculator for Texas Hold'em. Supports exact calculations and Monte Carlo simulations.
 
 ## Features
