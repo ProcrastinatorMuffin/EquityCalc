@@ -1,62 +1,67 @@
-# EquityCalc
+# Poker Equity Calculator
 
-## Description
-EquityCalc is a Poker Real-Time Equity Calculator that helps you determine the equity of your hand in real-time during a poker game.
+[![Build Status](https://github.com/procrastinatormuffin/poker-equity-calc/actions/workflows/build.yml/badge.svg)](https://github.com/procrastinatormuffin/poker-equity-calc/actions)
+[![Coverage](https://codecov.io/gh/procrastinatormuffin/poker-equity-calc/branch/main/graph/badge.svg)](https://codecov.io/gh/procrastinatormuffin/poker-equity-calc)
+
+Fast and accurate poker hand equity calculator for Texas Hold'em. Supports exact calculations and Monte Carlo simulations.
+
+## Features
+- Monte Carlo simulation for pre-/postflop analysis
+- Support for up to 9 players
+- Highly optimized hand evaluations
+- Real-time equity updates
 
 ## Installation
-1. Clone the repository:
-   ```
-   git clone https://github.com/ProcrastinatorMuffin/EquityCalc.git
-   ```
-2. Navigate to the project directory:
-   ```
-   cd EquityCalc
-   ```
-3. Install the dependencies:
-   ```
-   npm install
-   ```
-4. Set up Java:
-   - Ensure you have Java Development Kit (JDK) installed. You can download it from [Oracle's website](https://www.oracle.com/java/technologies/javase-jdk11-downloads.html).
-   - Set the `JAVA_HOME` environment variable to point to your JDK installation directory.
-   - Add the `bin` directory of your JDK installation to the `PATH` environment variable.
-5. Set up Maven:
-   - Ensure you have Apache Maven installed. You can download it from [Maven's website](https://maven.apache.org/download.cgi).
-   - Set the `MAVEN_HOME` environment variable to point to your Maven installation directory.
-   - Add the `bin` directory of your Maven installation to the `PATH` environment variable.
 
-## Usage
-1. Run the application:
-   ```
-   npm start
-   ```
-2. Follow the on-screen instructions to input your hand and calculate the equity.
-3. To run the Java application:
-   - Compile the Java code:
-     ```
-     javac -d bin src/main/java/com/equitycalc/*.java
-     ```
-   - Run the Java application:
-     ```
-     java -cp bin com.equitycalc.EquityCalc
-     ```
-4. Follow the on-screen instructions to input player hole cards and community cards, and to calculate and display win, loss, and split probabilities.
-5. To run the Java application using Maven:
-   - Compile the Java code:
-     ```
-     mvn compile
-     ```
-   - Run the Java application:
-     ```
-     mvn exec:java -Dexec.mainClass="com.equitycalc.EquityCalc"
-     ```
-6. Follow the on-screen instructions to input player hole cards and community cards, and to calculate and display win, loss, and split probabilities.
+### Clone repository
+`git clone https://github.com/procrastinatormuffin/poker-equity-calc.git`
 
----
+### Build project
+`mvn clean install`
 
-# TODO: DELETE TEXT BELOW
+## Contributing
 
-- Profile BitHandEvaluator.evaluateHand() internals
-Consider caching evaluated hands
-- Look for redundant calculations in hand ranking
-- Could use parallel processing for batch evaluations
+### Development Process
+1. Fork the repository
+2. Create a new branch (`git checkout -b feature/amazing-feature`)
+3. Make your changes
+4. Run tests (`mvn test`)
+5. Commit changes (`git commit -am 'Add amazing feature'`)
+6. Push to branch (`git push origin feature/amazing-feature`)
+7. Submit a Pull Request
+
+### Code Style
+- Follow Java coding conventions
+- Write unit tests for new features
+- Keep methods small and focused
+- Document public APIs using Javadoc
+
+### Bug Reports
+- Use the GitHub issue tracker
+- Include steps to reproduce
+- Specify your environment details
+- Attach relevant logs if applicable
+
+## License
+
+### MIT License
+
+Copyright (c) 2024 procrastinatormuffin
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
