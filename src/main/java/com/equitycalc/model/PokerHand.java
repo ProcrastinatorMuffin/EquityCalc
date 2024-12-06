@@ -1,7 +1,5 @@
 package com.equitycalc.model;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 public class PokerHand extends Hand {

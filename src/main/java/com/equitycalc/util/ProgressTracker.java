@@ -25,17 +25,10 @@ public class ProgressTracker {
     private static final String[] CARD_CENTER =   {"│     %s     │ "}; // Big center suit
     private static final String[] CARD_BOT_SUIT = {"│         %s │ "}; // Small suit (upside down)
     private static final String[] CARD_BOT_LINE = {"│         %s │ "}; // Rank (upside down)
-    
-    // Big suit symbols (larger Unicode variants)
-    private static final String[] BIG_SUITS = {"♥", "♦", "♣", "♠"};
-    private static final String[] SMALL_SUITS = {"♥", "♦", "♣", "♠"};
 
     // ANSI control sequences
     private static final String ANSI_CLEAR_LINE = "\033[2K"; // Clear entire line
     private static final String ANSI_UP = "\033[1A";         // Move cursor up
-    private static final String ANSI_HOME = "\033[H";        // Move to top
-    private static final String ANSI_SAVE = "\033[s";        // Save cursor position
-    private static final String ANSI_RESTORE = "\033[u";     // Restore cursor position
     
     private boolean isFirstUpdate = true;
     private int lastLineCount = 0;

@@ -10,12 +10,10 @@ public class PokerHandLookup implements Serializable {
     private static final long serialVersionUID = 1L;
     private final Map<String, SimulationResult> results;
     private final int simulationCount;
-    private final long timestamp;
 
     public PokerHandLookup(int simulationCount) {
         this.results = new HashMap<>();
         this.simulationCount = simulationCount;
-        this.timestamp = System.currentTimeMillis();
     }
 
     public void addResult(String key, SimulationResult result) {

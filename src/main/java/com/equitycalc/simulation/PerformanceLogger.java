@@ -5,8 +5,6 @@ import java.nio.file.*;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
-
 public class PerformanceLogger {
     private static final Map<String, Long> currentSimTotalTime = new HashMap<>();
     private static final Map<String, Long> currentSimCounts = new HashMap<>();

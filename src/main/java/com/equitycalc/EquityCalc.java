@@ -10,7 +10,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
 import java.util.ArrayList;
-import java.util.Scanner;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
@@ -164,7 +163,6 @@ public class EquityCalc {
     }
     
     private static void runSimulation(MonteCarloSim simulator, List<Card> heroCards) throws InterruptedException, ExecutionException {
-        long startTime = System.nanoTime();
         
         Player hero = new Player(heroCards);
         List<Player> players = new ArrayList<>();
