@@ -13,11 +13,35 @@ Fast and accurate poker hand equity calculator for Texas Hold'em. Supports exact
 
 ## Installation
 
+### Prerequisites
+- Java Development Kit (JDK) 17 or higher
+- Apache Maven 3.6 or higher
+- Git
+
 ### Clone repository
+
 `git clone https://github.com/procrastinatormuffin/poker-equity-calc.git`
 
+`cd poker-equity-calc`
+
 ### Build project
-`mvn clean install`
+
+#### Build with Maven
+mvn clean install
+
+#### Run tests
+mvn test
+
+#### Create executable JAR
+mvn package
+
+### Verify Installation
+
+# Run main application
+java -jar target/EquityCalc-1.0-SNAPSHOT.jar
+
+# Run with increased memory for large simulations
+java -Xmx4g -jar target/EquityCalc-1.0-SNAPSHOT.jar
 
 ## Contributing
 
