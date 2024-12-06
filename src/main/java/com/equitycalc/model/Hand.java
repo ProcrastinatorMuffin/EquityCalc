@@ -12,8 +12,8 @@ public class Hand {
     }
 
     public void addCard(Card card) {
-        if (cards.size() >= 5) {
-            throw new IllegalStateException("Cannot add more than 5 cards to a hand");
+        if (cards.size() >= 2) {
+            throw new IllegalStateException("Cannot add more than 2 cards to a hand");
         }
         if (cards.contains(card)) {
             throw new IllegalArgumentException("Duplicate card: " + card);

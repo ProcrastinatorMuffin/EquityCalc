@@ -1,6 +1,8 @@
 package com.equitycalc.model;
 
-public class Card {
+import java.io.Serializable;
+
+public class Card implements Comparable<Card> {
     public enum Suit {
         SPADES('s'), HEARTS('h'), DIAMONDS('d'), CLUBS('c');
 
@@ -89,4 +91,14 @@ public class Card {
     public int hashCode() {
         return 31 * suit.hashCode() + rank.hashCode();
     }
+
+    @Override
+    public int compareTo(Card other) {
+        int rankComparison = this.rank.compareTo(other.rank);
+        if (rankComparison != 0) {
+            return rankComparison;
+        }
+        return this.suit.compareTo(other.suit);
+    }
 }
+
