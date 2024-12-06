@@ -1,4 +1,4 @@
-taarget/
+target/
 .env
 dist/
 *.class
@@ -10,3 +10,6 @@ dist/
 *.exe
 *.dll
 *.lst
+*.bin
+*.json
+*.csv
