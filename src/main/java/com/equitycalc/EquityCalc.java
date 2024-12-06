@@ -2,8 +2,7 @@ package com.equitycalc;
 
 import com.equitycalc.model.Card;
 import com.equitycalc.model.Player;
-import com.equitycalc.SimulationResult;
-import com.equitycalc.MonteCarloSim;
+import com.equitycalc.simulation.*;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
@@ -45,11 +44,16 @@ public class EquityCalc {
     public static void main(String[] args) {
         try {
             MonteCarloSim simulator = new MonteCarloSim();
+            PerformanceLogger.startNewSimulation();
+            
+            // Initialize as empty HashSet
+            simulatedHands = new HashSet<>();
             
             // Load existing lookup table
             try {
                 simulator.loadLookupTable();
-                simulatedHands = simulator.getSimulatedHandKeys();
+                // Create mutable copy of the Set
+                simulatedHands = new HashSet<>(simulator.getSimulatedHandKeys());
                 System.out.printf("Loaded existing lookup table with %d hands%n", 
                     simulatedHands.size());
             } catch (IOException | ClassNotFoundException e) {
@@ -159,20 +163,26 @@ public class EquityCalc {
     }
     
     private static void runSimulation(MonteCarloSim simulator, List<Card> heroCards) {
+        long startTime = System.nanoTime();
+        
         Player hero = new Player(heroCards);
         List<Player> players = new ArrayList<>();
         players.add(hero);
         
-        // Always simulate against exactly 3 opponents
+        // Generate opponent hands
         Set<Card> usedCards = new HashSet<>(heroCards);
         for (int i = 0; i < NUM_OPPONENTS; i++) {
+            long opponentStartTime = System.nanoTime();
             List<Card> opponentCards = generateRandomHoleCards(usedCards);
             usedCards.addAll(opponentCards);
             players.add(new Player(opponentCards));
+            PerformanceLogger.logOperation("GenerateOpponentHand", opponentStartTime);
         }
         
         simulator.runSimulation(players);
         printResults(players);
+        
+        PerformanceLogger.logOperation("SimulationSetup", startTime);
     }
     
     private static String generateHandKey(List<Card> cards) {
@@ -210,5 +220,7 @@ public class EquityCalc {
         System.out.printf("Win: %.2f%% ", hero.getWinProbability() * 100);
         System.out.printf("Split: %.2f%% ", hero.getSplitProbability() * 100);
         System.out.printf("Lose: %.2f%%%n", hero.getLossProbability() * 100);
+        
+        PerformanceLogger.printStats();
     }
 }
