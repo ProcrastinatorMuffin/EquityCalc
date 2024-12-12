@@ -14,6 +14,7 @@ public class SimulationConfig {
     private final List<Card> deadCards;
     private final int numSimulations;
     private Street cachedStreet;
+    private static final boolean DEBUG_VALIDATION = Boolean.getBoolean("debug.validation");
 
     public enum Street {
         PREFLOP(0), FLOP(3), TURN(4), RIVER(5);
@@ -149,22 +150,50 @@ public class SimulationConfig {
 
     private void validateNoDuplicateCards() {
         Set<Card> allCards = new HashSet<>();
+        Set<Card> duplicates = new HashSet<>();
         
-        // Check board cards
-        if (!allCards.addAll(boardCards)) {
-            throw new IllegalArgumentException("Duplicate board cards detected");
+        if (DEBUG_VALIDATION) {
+            System.out.println("\nCard Validation Starting");
         }
-
-        // Check dead cards
-        if (!allCards.addAll(deadCards)) {
-            throw new IllegalArgumentException("Duplicate dead cards detected");
-        }
-
-        // Check player hole cards
-        for (Player player : knownPlayers) {
-            if (!allCards.addAll(player.getHoleCards())) {
-                throw new IllegalArgumentException("Duplicate hole cards detected");
+        
+        // Validate board cards
+        for (Card card : boardCards) {
+            assert card != null : "Null board card detected";
+            if (!allCards.add(card)) {
+                duplicates.add(card);
+                if (DEBUG_VALIDATION) {
+                    System.out.println("Duplicate board card: " + card);
+                }
             }
+        }
+    
+        // Validate dead cards
+        for (Card card : deadCards) {
+            assert card != null : "Null dead card detected";
+            if (!allCards.add(card)) {
+                duplicates.add(card);
+                if (DEBUG_VALIDATION) {
+                    System.out.println("Duplicate dead card: " + card);
+                }
+            }
+        }
+    
+        // Validate player cards
+        for (Player player : knownPlayers) {
+            assert player != null : "Null player detected";
+            for (Card card : player.getHoleCards()) {
+                assert card != null : "Null hole card detected";
+                if (!allCards.add(card)) {
+                    duplicates.add(card);
+                    if (DEBUG_VALIDATION) {
+                        System.out.println("Duplicate hole card: " + card);
+                    }
+                }
+            }
+        }
+    
+        if (!duplicates.isEmpty()) {
+            throw new IllegalArgumentException("Duplicate cards detected: " + duplicates);
         }
     }
 

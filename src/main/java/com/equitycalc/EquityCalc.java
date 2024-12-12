@@ -3,231 +3,265 @@ package com.equitycalc;
 import com.equitycalc.model.Card;
 import com.equitycalc.model.Player;
 import com.equitycalc.simulation.*;
-import java.io.IOException;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Random;
-import java.util.ArrayList;
-import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import java.util.stream.Collectors;
-
+import java.util.*;
 
 public class EquityCalc {
-    private static final boolean DEBUG_MODE = true;
-    private static final int NUM_OPPONENTS = 1;
-    private static final int MAX_HANDS_PER_RUN = 100;
-    private static Set<String> simulatedHands = new HashSet<>();
-    private static int handsSimulated = 0;
-    private static final List<String> ALL_POSSIBLE_HANDS = generateAllPossibleHands();
-    
-    // Test hand categories
-    private static final List<String> PREMIUM_HANDS = Arrays.asList(
-        "AhAs", "KhKs", "QhQs", "AhKh", // Premium pairs and suited connectors
-        "AcAd", "KcKd", "QcQd", "AcKc"
-    );
-    
-    private static final List<String> PLAYABLE_HANDS = Arrays.asList(
-        "JhJs", "ThTs", "AhQh", "KhQh", // Medium pairs and suited connectors
-        "AhTs", "KhJs", "QhJs", "JhTs",
-        "TsJs", "9s8s", "8s7s", "7s6s"
-    );
-    
-    private static final List<String> UNPLAYABLE_HANDS = Arrays.asList(
-        "2h7d", "3h8d", "4h9d", "5hTd", // Disconnected, unsuited hands
-        "2c7s", "3c8s", "4c9s", "5cTs",
-        "2d7h", "3d8h", "4d9h", "5dTh"
-    );
+    private static final int DEFAULT_ITERATIONS = 50000;
+    private final MonteCarloSim simulator;
+    private final List<SimulationMetrics> allResults;
+
+    public EquityCalc() {
+        this.simulator = new MonteCarloSim();
+        this.allResults = new ArrayList<>();
+    }
 
     public static void main(String[] args) {
-        try {
-            MonteCarloSim simulator = new MonteCarloSim();
+        EquityCalc calc = new EquityCalc();
+        calc.runBenchmarks();
+    }
+
+    private void runBenchmarks() {
+        System.out.println("Starting Equity Calculator Benchmarks\n");
+        
+        runPreflopScenarios();
+        runFlopScenarios();
+        runTurnScenarios();
+        runRiverScenarios();
+        
+        generateReport();
+    }
+
+    private void runPreflopScenarios() {
+        System.out.println("=== Preflop Scenarios ===");
+        
+        // Premium pairs vs premium holdings
+        runScenario("AA vs KK", 
+            new Card("As"), new Card("Ac"), 
+            new Card("Kh"), new Card("Kd"));
             
-            // Example specific scenario
-            Player hero = new Player(Arrays.asList(new Card("As"), new Card("Ks")));
-            Player villain = new Player(Arrays.asList(new Card("Qh"), new Card("Jh")));
+        runScenario("KK vs QQ vs AK", 
+            Arrays.asList(
+                new Player(Arrays.asList(new Card("Ks"), new Card("Kc"))),
+                new Player(Arrays.asList(new Card("Qs"), new Card("Qc"))),
+                new Player(Arrays.asList(new Card("Ah"), new Card("Kh")))
+            ));
+    
+        // Coinflip situations
+        runScenario("JJ vs AK suited",
+            new Card("Js"), new Card("Jc"),
+            new Card("Ah"), new Card("Kh"));
             
-            SimulationConfig config = SimulationConfig.builder()
+        runScenario("TT vs AQ vs AJ",
+            Arrays.asList(
+                new Player(Arrays.asList(new Card("Ts"), new Card("Tc"))),
+                new Player(Arrays.asList(new Card("As"), new Card("Qs"))),
+                new Player(Arrays.asList(new Card("Ah"), new Card("Jh")))
+            ));
+    
+        // Multi-way scenarios
+        runScenario("AA vs KK vs QQ vs JJ",
+            Arrays.asList(
+                new Player(Arrays.asList(new Card("As"), new Card("Ac"))),
+                new Player(Arrays.asList(new Card("Ks"), new Card("Kc"))),
+                new Player(Arrays.asList(new Card("Qs"), new Card("Qc"))),
+                new Player(Arrays.asList(new Card("Js"), new Card("Jc")))
+            ));
+    
+        // Suited connectors vs high cards
+        runScenario("89s vs AK vs KQ",
+            Arrays.asList(
+                new Player(Arrays.asList(new Card("8h"), new Card("9h"))),
+                new Player(Arrays.asList(new Card("As"), new Card("Ks"))),
+                new Player(Arrays.asList(new Card("Kc"), new Card("Qc")))
+            ));
+    
+        // Small pairs vs overcards
+        runScenario("55 vs AJ vs KQ",
+            Arrays.asList(
+                new Player(Arrays.asList(new Card("5s"), new Card("5c"))),
+                new Player(Arrays.asList(new Card("As"), new Card("Js"))),
+                new Player(Arrays.asList(new Card("Kh"), new Card("Qh")))
+            ));
+    }
+
+    private void runScenario(String description, Card hero1, Card hero2, Card villain1, Card villain2) {
+        Player hero = new Player(Arrays.asList(hero1, hero2));
+        Player villain = new Player(Arrays.asList(villain1, villain2));
+        
+        runSimulation(description, 
+            SimulationConfig.builder()
                 .withKnownPlayers(Arrays.asList(hero, villain))
-                .flop(new Card("Th"), new Card("9h"), new Card("2d"))
-                .withDeadCards(Arrays.asList(new Card("3c")))
-                .withRandomPlayers(1)
-                .build();
-                
+                .preflop()
+                .withNumSimulations(DEFAULT_ITERATIONS)
+                .build()
+        );
+    }
+    
+    private void runScenario(String description, List<Player> players) {
+        runSimulation(description,
+            SimulationConfig.builder()
+                .withKnownPlayers(players)
+                .preflop()
+                .withNumSimulations(DEFAULT_ITERATIONS)
+                .build()
+        );
+    }
+
+    private void runFlopScenarios() {
+        System.out.println("\n=== Flop Scenarios ===");
+        
+        // Scenario: Set vs Flush Draw
+        Player hero = new Player(Arrays.asList(new Card("Ah"), new Card("As")));
+        Player villain = new Player(Arrays.asList(new Card("Kh"), new Card("Qh")));
+        
+        runSimulation("Set vs Flush Draw", 
+            SimulationConfig.builder()
+                .withKnownPlayers(Arrays.asList(hero, villain))
+                .flop(new Card("Ad"), new Card("7h"), new Card("2h"))
+                .withNumSimulations(DEFAULT_ITERATIONS)
+                .build()
+        );
+    }
+
+    private void runTurnScenarios() {
+        System.out.println("\n=== Turn Scenarios ===");
+        
+        // Scenario: Overpair vs Two Pair
+        Player hero = new Player(Arrays.asList(new Card("As"), new Card("Ac")));
+        Player villain = new Player(Arrays.asList(new Card("Kd"), new Card("Qd")));
+        
+        SimulationConfig config = SimulationConfig.builder()
+            .withKnownPlayers(Arrays.asList(hero, villain))
+            .withBoardCards(Arrays.asList(
+                new Card("Kh"), new Card("Qs"), new Card("7c"), new Card("2d")))
+            .withNumSimulations(DEFAULT_ITERATIONS)
+            .build();
+            
+        runSimulation("Overpair vs Two Pair", config);
+    }
+
+    private void runRiverScenarios() {
+        System.out.println("\n=== River Scenarios ===");
+        
+        // Scenario: Full House vs Flush
+        Player hero = new Player(Arrays.asList(new Card("Ah"), new Card("Ad")));
+        Player villain = new Player(Arrays.asList(new Card("Kh"), new Card("Jh")));
+        
+        List<Card> board = Arrays.asList(
+            new Card("Ac"), new Card("Kd"), new Card("Kc"),
+            new Card("2h"), new Card("5h")
+        );
+        
+        SimulationConfig config = SimulationConfig.builder()
+            .withKnownPlayers(Arrays.asList(hero, villain))
+            .withBoardCards(board)
+            .withNumSimulations(DEFAULT_ITERATIONS)
+            .build();
+            
+        runSimulation("Full House vs Flush", config);
+    }
+
+    private void runSimulation(String description, SimulationConfig config) {
+        System.out.println("\nRunning: " + description);
+        long startTime = System.currentTimeMillis();
+        
+        try {
             simulator.runSimulation(config);
-            printResults(Arrays.asList(hero, villain));
+            
+            // Print results with confidence intervals
+            List<Player> players = config.getKnownPlayers();
+            SimulationResult result = simulator.getStoredResult(players);
+            
+            for (int i = 0; i < players.size(); i++) {
+                Player p = players.get(i);
+                double[] winCI = result.getWinProbabilityWithConfidence(i);
+                double[] splitCI = result.getSplitProbabilityWithConfidence(i);
+                double[] lossCI = result.getLossProbabilityWithConfidence(i);
+                
+                System.out.printf("Player %d:\n", i + 1);
+                System.out.printf("  Win: %.2f%% (95%% CI: %.2f%% - %.2f%%)\n",
+                    p.getWinProbability() * 100,
+                    winCI[0] * 100,
+                    winCI[1] * 100);
+                System.out.printf("  Split: %.2f%% (95%% CI: %.2f%% - %.2f%%)\n",
+                    p.getSplitProbability() * 100,
+                    splitCI[0] * 100,
+                    splitCI[1] * 100);
+                System.out.printf("  Lose: %.2f%% (95%% CI: %.2f%% - %.2f%%)\n",
+                    p.getLossProbability() * 100,
+                    lossCI[0] * 100,
+                    lossCI[1] * 100);
+            }
+            
+            long duration = System.currentTimeMillis() - startTime;
+            System.out.printf("Time: %.2f seconds\n", duration / 1000.0);
+            System.out.println("----------------------------------------");
+            
+            // Store metrics with confidence intervals
+            allResults.add(new SimulationMetrics(description, duration, players, result));
             
         } catch (Exception e) {
-            System.err.println("Error: " + e.getMessage());
+            System.err.println("Error running simulation: " + e.getMessage());
             e.printStackTrace();
         }
     }
-    
-    // Modified debug simulations to test different scenarios
-    private static void runDebugSimulations(MonteCarloSim simulator) 
-            throws InterruptedException, ExecutionException {
-        System.out.println("\n=== Testing Premium Hands Preflop ===");
-        simulateHandCategory(simulator, PREMIUM_HANDS, null);
+
+    private void generateReport() {
+        System.out.println("\n=== Simulation Summary Report ===");
+        System.out.println("\nTotal scenarios run: " + allResults.size());
         
-        System.out.println("\n=== Testing Premium Hands on Flop ===");
-        List<Card> wetFlop = Arrays.asList(
-            new Card("Th"), new Card("Jh"), new Card("Qh")
-        );
-        simulateHandCategory(simulator, PREMIUM_HANDS, wetFlop);
+        // Performance metrics
+        long totalDuration = allResults.stream().mapToLong(m -> m.duration).sum();
+        double avgDuration = totalDuration / (double)allResults.size();
+        System.out.printf("\nPerformance Metrics:");
+        System.out.printf("\n- Total time: %.2f seconds", totalDuration / 1000.0);
+        System.out.printf("\n- Average time per scenario: %.2f seconds", avgDuration / 1000.0);
         
-        System.out.println("\n=== Testing Playable Hands Preflop ===");
-        simulateHandCategory(simulator, PLAYABLE_HANDS, null);
-    }
-    
-    private static void simulateHandCategory(MonteCarloSim simulator, 
-            List<String> hands, List<Card> boardCards) 
-            throws InterruptedException, ExecutionException {
-        for (String handKey : hands) {
-            List<Card> heroCards = Arrays.asList(
-                new Card(handKey.substring(0, 2)),
-                new Card(handKey.substring(2, 4))
-            );
-            
-            System.out.printf("\nSimulating hand: %s %s", 
-                heroCards.get(0), heroCards.get(1));
-            
-            if (boardCards != null) {
-                System.out.printf(" on board: %s%n", 
-                    boardCards.stream()
-                        .map(Card::toString)
-                        .collect(Collectors.joining(" "))
-                );
-                runFlopSimulation(simulator, heroCards, boardCards);
-            } else {
-                System.out.println(" preflop");
-                runSimulation(simulator, heroCards);
-            }
+        // Results summary
+        System.out.println("\nScenario Results:");
+        for (SimulationMetrics metrics : allResults) {
+            System.out.printf("\n%s:", metrics.description);
+            metrics.results.forEach((player, result) -> {
+                System.out.printf("\n  Player %d:", player + 1);
+                System.out.printf("\n    Win: %s", result.formatRate(result.winCI()));
+                System.out.printf("\n    Split: %s", result.formatRate(result.splitCI()));
+                System.out.printf("\n    Lose: %s", result.formatRate(result.lossCI()));
+            });
         }
-    }
-    
-    private static void runProductionSimulations(MonteCarloSim simulator) throws InterruptedException, ExecutionException {
-        while (handsSimulated < MAX_HANDS_PER_RUN) {
-            List<String> remainingHands = ALL_POSSIBLE_HANDS.stream()
-                .filter(hand -> !simulatedHands.contains(hand))
-                .collect(Collectors.toList());
-            
-            if (remainingHands.isEmpty()) {
-                System.out.println("All possible hands have been simulated!");
-                break;
-            }
-            
-            String handKey = remainingHands.get(new Random().nextInt(remainingHands.size()));
-            List<Card> heroCards = Arrays.asList(
-                new Card(handKey.substring(0, 2)),
-                new Card(handKey.substring(2, 4))
-            );
-            
-            System.out.printf("Simulating hand: %s %s%n", 
-                heroCards.get(0), heroCards.get(1));
-            
-            runSimulation(simulator, heroCards);
-            handsSimulated++;
-            simulatedHands.add(handKey);
-            try {
-                simulator.saveLookupTable();
-            } catch (IOException e) {
-                System.err.println("Error saving lookup table: " + e.getMessage());
-                e.printStackTrace();
-            }
-            
-            System.out.printf("Progress: %d/%d hands simulated (%d hands remaining)%n", 
-                handsSimulated, MAX_HANDS_PER_RUN, remainingHands.size() - 1);
-        }
+        
+        System.out.println("\n----------------------------------------");
     }
 
-    private static List<String> generateAllPossibleHands() {
-        List<String> hands = new ArrayList<>();
-        Card.Rank[] ranks = Card.Rank.values();
-        Card.Suit[] suits = Card.Suit.values();
+    private class SimulationMetrics {
+        private final String description;
+        private final long duration;
+        private final Map<Integer, PlayerResultWithCI> results;
         
-        for (int i = 0; i < ranks.length; i++) {
-            for (int j = 0; j < suits.length; j++) {
-                Card card1 = new Card(ranks[i], suits[j]);
-                for (int k = i; k < ranks.length; k++) {
-                    for (int l = (k == i ? j + 1 : 0); l < suits.length; l++) {
-                        Card card2 = new Card(ranks[k], suits[l]);
-                        String handKey = generateHandKey(Arrays.asList(card1, card2));
-                        hands.add(handKey);
-                    }
-                }
-            }
-        }
-        return hands;
-    }
-    
-    private static void runSimulation(MonteCarloSim simulator, List<Card> heroCards) 
-            throws InterruptedException, ExecutionException {
-        Player hero = new Player(heroCards);
-        
-        // Create base config
-        SimulationConfig config = SimulationConfig.builder()
-            .withKnownPlayers(Collections.singletonList(hero))
-            .withRandomPlayers(NUM_OPPONENTS)
-            .preflop()  // Start with preflop
-            .build();
+        public SimulationMetrics(String description, long duration, List<Player> players, SimulationResult simResult) {
+            this.description = description;
+            this.duration = duration;
+            this.results = new HashMap<>();
             
-        simulator.runSimulation(config);
-        printResults(Collections.singletonList(hero));
-    }
-    
-    private static String generateHandKey(List<Card> cards) {
-        // Normalize hand representation (e.g., AhKs and KsAh are the same hand)
-        return cards.get(0).compareTo(cards.get(1)) <= 0 ? 
-            cards.get(0).toString() + cards.get(1).toString() :
-            cards.get(1).toString() + cards.get(0).toString();
-    }
-
-    // New method for flop simulations
-    private static void runFlopSimulation(MonteCarloSim simulator, List<Card> heroCards, 
-            List<Card> flopCards) throws InterruptedException, ExecutionException {
-        Player hero = new Player(heroCards);
-        
-        SimulationConfig config = SimulationConfig.builder()
-            .withKnownPlayers(Collections.singletonList(hero))
-            .withRandomPlayers(NUM_OPPONENTS)
-            .flop(flopCards.get(0), flopCards.get(1), flopCards.get(2))
-            .build();
-            
-        simulator.runSimulation(config);
-        printResults(Collections.singletonList(hero));
-    }
-    
-    private static List<Card> generateRandomHoleCards(Set<Card> usedCards) {
-        List<Card> availableCards = new ArrayList<>();
-        for (Card.Suit suit : Card.Suit.values()) {
-            for (Card.Rank rank : Card.Rank.values()) {
-                Card card = new Card(rank, suit);
-                if (!usedCards.contains(card)) {
-                    availableCards.add(card);
-                }
+            for (int i = 0; i < players.size(); i++) {
+                results.put(i, new PlayerResultWithCI(
+                    simResult.getWinProbabilityWithConfidence(i),
+                    simResult.getSplitProbabilityWithConfidence(i),
+                    simResult.getLossProbabilityWithConfidence(i)
+                ));
             }
         }
         
-        if (availableCards.size() < 2) {
-            throw new IllegalStateException("Not enough cards available");
+        public record PlayerResultWithCI(
+            double[] winCI,
+            double[] splitCI,
+            double[] lossCI
+        ) {
+            public String formatRate(double[] ci) {
+                return String.format("%.2f%% (%.2f%% - %.2f%%)",
+                    (ci[0] + ci[1]) / 2 * 100,
+                    ci[0] * 100,
+                    ci[1] * 100);
+            }
         }
-        
-        Collections.shuffle(availableCards);
-        return Arrays.asList(availableCards.get(0), availableCards.get(1));
-    }
-    
-    private static void printResults(List<Player> players) {
-        Player hero = players.get(0);
-        System.out.printf("Hero (%s):%n", 
-            hero.getHoleCards().stream()
-                .map(Card::toString)
-                .collect(Collectors.joining(" ")));
-        System.out.printf("Win: %.2f%% ", hero.getWinProbability() * 100);
-        System.out.printf("Split: %.2f%% ", hero.getSplitProbability() * 100);
-        System.out.printf("Lose: %.2f%%%n", hero.getLossProbability() * 100);
-        
-        PerformanceLogger.printStats();
     }
 }
