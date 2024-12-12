@@ -203,47 +203,82 @@ public class ProgressTracker {
 
     public void update(int progress, List<Double> winRates, List<Double> splitRates) {
         this.current = progress;
-        
         StringBuilder output = new StringBuilder();
         clearPreviousOutput(output);
-        
-        // Display board if exists
+    
+        // Board display at top
         if (!boardDisplay.isEmpty()) {
-            output.append("\nBoard:\n").append(boardDisplay);
+            output.append("\nBoard:\n").append(boardDisplay).append("\n");
         }
+    
+        final int cardsPerRow = 3;
+        final int handWidth = 26; // Width of two cards + spacing
+        final int totalPlayers = knownPlayers.size() + config.getNumRandomPlayers();
         
-        // Modify display of players:
-        for (int i = 0; i < knownPlayers.size(); i++) {
-            output.append("\n")
-                .append(getPlayerLabel(i, knownPlayers.size()))
-                .append(":\n")
-                .append(playerDisplays.get(i));
+        int currentPlayer = 0;
+        while (currentPlayer < totalPlayers) {
+            int rowPlayers = Math.min(cardsPerRow, totalPlayers - currentPlayer);
+            StringBuilder[] rowLines = new StringBuilder[11];
+            for (int i = 0; i < rowLines.length; i++) {
+                rowLines[i] = new StringBuilder();
+            }
+            
+            for (int i = 0; i < rowPlayers; i++) {
+                int playerIdx = currentPlayer + i;
+                boolean isRandom = playerIdx >= knownPlayers.size();
+                
+                // Add card lines
+                if (isRandom) {
+                    String[] cardLines = visualizeCardBack().split("\n");
+                    for (int line = 0; line < cardLines.length; line++) {
+                        rowLines[line].append(cardLines[line]).append("   ");
+                    }
+                } else {
+                    String[] cardLines = playerDisplays.get(playerIdx).split("\n");
+                    for (int line = 0; line < cardLines.length; line++) {
+                        rowLines[line].append(cardLines[line]).append("   ");
+                    }
+                }
+                
+                // Create stats with colored label but calculate padding without ANSI codes
+                String label = isRandom ? 
+                    String.format("%sRandom%s", RANDOM_PLAYER_COLOR, ANSI_RESET) :
+                    getPlayerLabel(playerIdx, knownPlayers.size());
+                    
+                String plainStats = String.format("[%s: %.2f%%]",
+                    label.replaceAll("\u001B\\[[;\\d]*m", ""), // Remove ANSI codes for length calculation
+                    winRates.get(playerIdx) * 100);
+                    
+                String coloredStats = String.format("[%s: %.2f%%]",
+                    label,
+                    winRates.get(playerIdx) * 100);
+                    
+                // Calculate padding based on plain text length
+                int padding = Math.max(0, (handWidth - plainStats.length()) / 2);
+                
+                // Add centered stats line with proper padding
+                rowLines[9].append(" ".repeat(padding))
+                          .append(coloredStats)
+                          .append(" ".repeat(Math.max(0, handWidth - plainStats.length() - padding)))
+                          .append("   ");
+            }
+            
+            // Append completed row
+            for (StringBuilder line : rowLines) {
+                if (line.length() > 0) {
+                    output.append(line.toString()).append("\n");
+                }
+            }
+            
+            currentPlayer += rowPlayers;
         }
-
-        // Add random players if any:
-        for (int i = 0; i < config.getNumRandomPlayers(); i++) {
-            output.append("\n")
-                .append(RANDOM_PLAYER_COLOR)
-                .append("Random Player ")
-                .append(knownPlayers.size() + i + 1)
-                .append(ANSI_RESET)
-                .append(":\n")
-                .append(visualizeCardBack());
-        }
-        
-        // Add progress bar
+    
+        // Progress info at bottom
         appendProgressBar(output);
-        
-        // Add equity distribution bar
+        output.append(String.format("Simulations: [%,d] | Total: [%,d]", current, total));
         appendEquityBar(output, winRates);
-        
-        // Add detailed stats for each player
-        appendPlayerStats(output, winRates, splitRates);
-        
-        // Add time estimates
         appendTimeEstimates(output);
         
-        // Print the output
         System.out.print(output);
         lastLineCount = output.toString().split("\n").length;
         isFirstUpdate = false;
@@ -281,24 +316,47 @@ public class ProgressTracker {
     }
 
     private void appendEquityBar(StringBuilder output, List<Double> equities) {
-        output.append("\nEquity Distribution: ");
-        int totalWidth = 50;
+        int totalWidth = 48;
         int currentPosition = 0;
+        String leftPadding = "                    "; // 20 spaces
+        
+        // Add top border with corners - aligned with left border
+        output.append("\nEquity Distribution: \n")
+              .append(leftPadding);
+        
+        // Calculate total equity to normalize if sum > 1
+        double totalEquity = equities.stream().mapToDouble(Double::doubleValue).sum();
         
         for (int i = 0; i < equities.size(); i++) {
-            int width = (int) (equities.get(i) * totalWidth);
+            // Normalize width calculation and ensure minimum of 1
+            double normalizedEquity = equities.get(i) / Math.max(1.0, totalEquity);
+            int width = Math.max(1, (int)(normalizedEquity * (totalWidth - (equities.size() - 1))));
+            
+            // Adjust last section to fit remaining space
+            if (i == equities.size() - 1) {
+                width = Math.max(1, totalWidth - currentPosition);
+            }
+            
             String color = getPlayerColor(i);
-            output.append(color)
-                .append("█".repeat(width))
-                .append(ANSI_RESET);
+            
+            // Add section with borders
+            output.append(color);
+            if (i > 0) {
+                output.append("│");
+                currentPosition++;
+            }
+            output.append("█".repeat(width));
+            output.append(ANSI_RESET);
+            
             currentPosition += width;
         }
         
-        // Fill remaining space if any
+        // Fill any remaining space
         if (currentPosition < totalWidth) {
             output.append(" ".repeat(totalWidth - currentPosition));
         }
-        output.append("\n");
+        output.append("\n ");
+        
     }
 
     private String getPlayerColor(int playerIndex) {
