@@ -44,27 +44,20 @@ public class EquityCalc {
     public static void main(String[] args) {
         try {
             MonteCarloSim simulator = new MonteCarloSim();
-            PerformanceLogger.startNewSimulation();
             
-            // Initialize as empty HashSet
-            simulatedHands = new HashSet<>();
+            // Example specific scenario
+            Player hero = new Player(Arrays.asList(new Card("As"), new Card("Ks")));
+            Player villain = new Player(Arrays.asList(new Card("Qh"), new Card("Jh")));
             
-            // Load existing lookup table
-            try {
-                simulator.loadLookupTable();
-                // Create mutable copy of the Set
-                simulatedHands = new HashSet<>(simulator.getSimulatedHandKeys());
-                System.out.printf("Loaded existing lookup table with %d hands%n", 
-                    simulatedHands.size());
-            } catch (IOException | ClassNotFoundException e) {
-                System.out.println("Creating new lookup table");
-            }
-            
-            if (DEBUG_MODE) {
-                runDebugSimulations(simulator);
-            } else {
-                runProductionSimulations(simulator);
-            }
+            SimulationConfig config = SimulationConfig.builder()
+                .withKnownPlayers(Arrays.asList(hero, villain))
+                .flop(new Card("Th"), new Card("9h"), new Card("2d"))
+                .withDeadCards(Arrays.asList(new Card("3c")))
+                .withRandomPlayers(1)
+                .build();
+                
+            simulator.runSimulation(config);
+            printResults(Arrays.asList(hero, villain));
             
         } catch (Exception e) {
             System.err.println("Error: " + e.getMessage());
@@ -72,37 +65,44 @@ public class EquityCalc {
         }
     }
     
-    private static void runDebugSimulations(MonteCarloSim simulator) throws InterruptedException, ExecutionException {
-        System.out.println("\n=== Testing Premium Hands ===");
-        simulateHandCategory(simulator, PREMIUM_HANDS);
+    // Modified debug simulations to test different scenarios
+    private static void runDebugSimulations(MonteCarloSim simulator) 
+            throws InterruptedException, ExecutionException {
+        System.out.println("\n=== Testing Premium Hands Preflop ===");
+        simulateHandCategory(simulator, PREMIUM_HANDS, null);
         
-        System.out.println("\n=== Testing Playable Hands ===");
-        simulateHandCategory(simulator, PLAYABLE_HANDS);
+        System.out.println("\n=== Testing Premium Hands on Flop ===");
+        List<Card> wetFlop = Arrays.asList(
+            new Card("Th"), new Card("Jh"), new Card("Qh")
+        );
+        simulateHandCategory(simulator, PREMIUM_HANDS, wetFlop);
         
-        System.out.println("\n=== Testing Unplayable Hands ===");
-        simulateHandCategory(simulator, UNPLAYABLE_HANDS);
+        System.out.println("\n=== Testing Playable Hands Preflop ===");
+        simulateHandCategory(simulator, PLAYABLE_HANDS, null);
     }
     
-    private static void simulateHandCategory(MonteCarloSim simulator, List<String> hands) throws InterruptedException, ExecutionException {
+    private static void simulateHandCategory(MonteCarloSim simulator, 
+            List<String> hands, List<Card> boardCards) 
+            throws InterruptedException, ExecutionException {
         for (String handKey : hands) {
-            if (!simulatedHands.contains(handKey)) {
-                List<Card> heroCards = Arrays.asList(
-                    new Card(handKey.substring(0, 2)),
-                    new Card(handKey.substring(2, 4))
+            List<Card> heroCards = Arrays.asList(
+                new Card(handKey.substring(0, 2)),
+                new Card(handKey.substring(2, 4))
+            );
+            
+            System.out.printf("\nSimulating hand: %s %s", 
+                heroCards.get(0), heroCards.get(1));
+            
+            if (boardCards != null) {
+                System.out.printf(" on board: %s%n", 
+                    boardCards.stream()
+                        .map(Card::toString)
+                        .collect(Collectors.joining(" "))
                 );
-                
-                System.out.printf("\nSimulating hand: %s %s%n", 
-                    heroCards.get(0), heroCards.get(1));
-                
+                runFlopSimulation(simulator, heroCards, boardCards);
+            } else {
+                System.out.println(" preflop");
                 runSimulation(simulator, heroCards);
-                simulatedHands.add(handKey);
-                try {
-                    simulator.saveLookupTable();
-                } catch (IOException e) {
-                    System.err.println("Error saving lookup table: " + e.getMessage());
-                    e.printStackTrace();
-                }
-
             }
         }
     }
@@ -162,25 +162,19 @@ public class EquityCalc {
         return hands;
     }
     
-    private static void runSimulation(MonteCarloSim simulator, List<Card> heroCards) throws InterruptedException, ExecutionException {
-        
+    private static void runSimulation(MonteCarloSim simulator, List<Card> heroCards) 
+            throws InterruptedException, ExecutionException {
         Player hero = new Player(heroCards);
-        List<Player> players = new ArrayList<>();
-        players.add(hero);
         
-        // Generate opponent hands
-        Set<Card> usedCards = new HashSet<>(heroCards);
-        for (int i = 0; i < NUM_OPPONENTS; i++) {
-            long opponentStartTime = System.nanoTime();
-            List<Card> opponentCards = generateRandomHoleCards(usedCards);
-            usedCards.addAll(opponentCards);
-            players.add(new Player(opponentCards));
-            PerformanceLogger.logOperation("GenerateOpponentHand", opponentStartTime);
-        }
-        
-        simulator.runSimulation(players);
-        printResults(players);
-        
+        // Create base config
+        SimulationConfig config = SimulationConfig.builder()
+            .withKnownPlayers(Collections.singletonList(hero))
+            .withRandomPlayers(NUM_OPPONENTS)
+            .preflop()  // Start with preflop
+            .build();
+            
+        simulator.runSimulation(config);
+        printResults(Collections.singletonList(hero));
     }
     
     private static String generateHandKey(List<Card> cards) {
@@ -188,6 +182,21 @@ public class EquityCalc {
         return cards.get(0).compareTo(cards.get(1)) <= 0 ? 
             cards.get(0).toString() + cards.get(1).toString() :
             cards.get(1).toString() + cards.get(0).toString();
+    }
+
+    // New method for flop simulations
+    private static void runFlopSimulation(MonteCarloSim simulator, List<Card> heroCards, 
+            List<Card> flopCards) throws InterruptedException, ExecutionException {
+        Player hero = new Player(heroCards);
+        
+        SimulationConfig config = SimulationConfig.builder()
+            .withKnownPlayers(Collections.singletonList(hero))
+            .withRandomPlayers(NUM_OPPONENTS)
+            .flop(flopCards.get(0), flopCards.get(1), flopCards.get(2))
+            .build();
+            
+        simulator.runSimulation(config);
+        printResults(Collections.singletonList(hero));
     }
     
     private static List<Card> generateRandomHoleCards(Set<Card> usedCards) {

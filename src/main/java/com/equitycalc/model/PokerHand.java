@@ -83,6 +83,27 @@ public class PokerHand extends Hand {
         return mask;
     }
 
+    public void addCards(List<Card> newCards) {
+        if (newCards == null) {
+            throw new IllegalArgumentException("Cards list cannot be null");
+        }
+        
+        if (getCardCount() + newCards.size() > MAX_CARDS) {
+            throw new IllegalStateException(
+                String.format("Cannot add %d cards. Maximum allowed is %d, current count is %d", 
+                    newCards.size(), MAX_CARDS, getCardCount())
+            );
+        }
+        
+        for (Card card : newCards) {
+            if (Card.isBitSet(bitMask, card)) {
+                throw new IllegalArgumentException("Duplicate card detected: " + card);
+            }
+            cards.add(card);
+            bitMask = Card.addCardToBitMask(bitMask, card);
+        }
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

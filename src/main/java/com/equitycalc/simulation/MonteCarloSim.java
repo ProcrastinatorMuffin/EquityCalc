@@ -73,42 +73,47 @@ public class MonteCarloSim {
         return lookupTable.getResult(key);
     }
     
-    public void runSimulation(List<Player> players) throws InterruptedException, ExecutionException {
+    public void runSimulation(SimulationConfig config) throws InterruptedException, ExecutionException {
         long startTime = System.nanoTime();
         
-        if (players.size() > MAX_PLAYERS) {
+        int totalPlayers = config.getKnownPlayers().size() + config.getNumRandomPlayers();
+        if (totalPlayers > MAX_PLAYERS) {
             throw new IllegalArgumentException("Maximum " + MAX_PLAYERS + " players allowed");
         }
         
-        SimulationResult result = new SimulationResult(players.size());
-        ProgressTracker progress = new ProgressTracker(numSimulations);
-
-        String heroHandKey = generateLookupKey(players.subList(0, 1));
-        progress.setCurrentHand(heroHandKey);
+        SimulationResult result = new SimulationResult(totalPlayers);
+        ProgressTracker progress = new ProgressTracker(config.getNumSimulations(), config);
         
-        for (int i = 0; i < numSimulations; i++) {
+        for (int i = 0; i < config.getNumSimulations(); i++) {
             long batchStartTime = System.nanoTime();
             if (i % SIMULATION_BATCH_SIZE == 0) {
                 deck.cards = new ArrayList<>(new Deck().cards);
                 PerformanceLogger.logOperation("DeckReset", batchStartTime);
                 
-                // Update progress every batch
-                progress.update(i, 
-                    result.getWinProbability(0), 
-                    result.getSplitProbability(0));
+                // Update progress with all players' stats
+                List<Double> winRates = new ArrayList<>();
+                List<Double> splitRates = new ArrayList<>();
+                
+                for (int p = 0; p < totalPlayers; p++) {
+                    winRates.add(result.getWinProbability(p));
+                    splitRates.add(result.getSplitProbability(p));
+                }
+                
+                progress.update(i, winRates, splitRates);
             }
             
             long handStartTime = System.nanoTime();
-            simulateOneHand(players, result);
+            simulateOneHand(config, result);
             PerformanceLogger.logOperation("SimulateHand", handStartTime);
         }
         
         progress.complete();
         
-        // Update final results
+        // Update final results for known players
         long resultUpdateTime = System.nanoTime();
-        for (int i = 0; i < players.size(); i++) {
-            Player player = players.get(i);
+        List<Player> knownPlayers = config.getKnownPlayers();
+        for (int i = 0; i < knownPlayers.size(); i++) {
+            Player player = knownPlayers.get(i);
             player.setWinProbability(result.getWinProbability(i));
             player.setLossProbability(result.getLossProbability(i));
             player.setSplitProbability(result.getSplitProbability(i));
@@ -117,21 +122,24 @@ public class MonteCarloSim {
         
         // Store in lookup table
         long lookupTime = System.nanoTime();
-        String key = generateLookupKey(players);
+        String key = generateLookupKey(config.getKnownPlayers());
         lookupTable.addResult(key, result);
         PerformanceLogger.logOperation("LookupTableAdd", lookupTime);
         
         PerformanceLogger.logOperation("FullSimulation", startTime);
     }
     
-    // Modify simulateOneHand method:
-    private void simulateOneHand(List<Player> players, SimulationResult result) throws InterruptedException, ExecutionException {
+    private void simulateOneHand(SimulationConfig config, SimulationResult result) throws InterruptedException, ExecutionException {
         long deckPrepTime = System.nanoTime();
         deck.cards = new ArrayList<>(new Deck().cards);
         
-        // Remove hole cards from deck
+        // Remove all known cards from deck
         Set<Card> usedCards = new HashSet<>();
-        for (Player player : players) {
+        usedCards.addAll(config.getBoardCards());    // Known board cards
+        usedCards.addAll(config.getDeadCards());     // Dead cards
+        
+        // Remove known player hole cards
+        for (Player player : config.getKnownPlayers()) {
             usedCards.addAll(player.getHoleCards());
         }
         deck.cards.removeAll(usedCards);
@@ -141,20 +149,31 @@ public class MonteCarloSim {
         deck.shuffle();
         PerformanceLogger.logOperation("DeckShuffle", shuffleTime);
         
+        // Deal random hole cards for unknown players
+        long randomPlayersTime = System.nanoTime();
+        List<Player> allPlayers = new ArrayList<>(config.getKnownPlayers());
+        for (int i = 0; i < config.getNumRandomPlayers(); i++) {
+            List<Card> randomHoleCards = deck.dealCards(2);
+            allPlayers.add(new Player(randomHoleCards));
+        }
+        PerformanceLogger.logOperation("RandomPlayers", randomPlayersTime);
+        
+        // Complete the board if needed
         long dealTime = System.nanoTime();
-        List<Card> communityCards = deck.dealCards(5);
+        List<Card> finalBoard = new ArrayList<>(config.getBoardCards());
+        int remainingCards = 5 - finalBoard.size();
+        if (remainingCards > 0) {
+            finalBoard.addAll(deck.dealCards(remainingCards));
+        }
         PerformanceLogger.logOperation("DealCommunityCards", dealTime);
         
+        // Create hands for all players
         long handCreateTime = System.nanoTime();
         List<PokerHand> hands = new ArrayList<>();
-        for (Player player : players) {
+        for (Player player : allPlayers) {
             PokerHand hand = new PokerHand();
-            for (Card card : player.getHoleCards()) {
-                hand.addCard(card);
-            }
-            for (Card card : communityCards) {
-                hand.addCard(card);
-            }
+            hand.addCards(player.getHoleCards());
+            hand.addCards(finalBoard);
             
             if (hand.getCardCount() != 7) {
                 throw new IllegalStateException(
