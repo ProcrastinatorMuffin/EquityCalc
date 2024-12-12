@@ -6,11 +6,13 @@ import com.equitycalc.util.ProgressTracker;
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 public class MonteCarloSim {
     private static final int MAX_PLAYERS = 6;
     private static final int SIMULATION_BATCH_SIZE = 1000;
+    private Consumer<Integer> progressCallback;
     
     private final Deck deck;
     private final int numSimulations;
@@ -25,6 +27,10 @@ public class MonteCarloSim {
 
     public Set<String> getSimulatedHandKeys() {
         return lookupTable.getAllKeys();
+    }
+
+    public void setProgressCallback(Consumer<Integer> callback) {
+        this.progressCallback = callback;
     }
 
      private String generateLookupKey(List<Player> players) {
@@ -85,8 +91,8 @@ public class MonteCarloSim {
         ProgressTracker progress = new ProgressTracker(config.getNumSimulations(), config);
         
         for (int i = 0; i < config.getNumSimulations(); i++) {
-            long batchStartTime = System.nanoTime();
             if (i % SIMULATION_BATCH_SIZE == 0) {
+                long batchStartTime = System.nanoTime(); // Added this line
                 deck.cards = new ArrayList<>(new Deck().cards);
                 PerformanceLogger.logOperation("DeckReset", batchStartTime);
                 
@@ -100,6 +106,12 @@ public class MonteCarloSim {
                 }
                 
                 progress.update(i, winRates, splitRates);
+    
+                // Renamed progress to progressPercent
+                if (progressCallback != null) {
+                    int progressPercent = (int)((i * 100.0) / config.getNumSimulations());
+                    progressCallback.accept(progressPercent);
+                }
             }
             
             long handStartTime = System.nanoTime();
