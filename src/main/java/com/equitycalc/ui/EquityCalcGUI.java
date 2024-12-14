@@ -2,94 +2,114 @@ package com.equitycalc.ui;
 
 import com.equitycalc.model.*;
 import com.equitycalc.simulation.*;
-import com.equitycalc.ui.components.button.MacButton;
 import com.equitycalc.ui.panel.BoardPanel;
 import com.equitycalc.ui.panel.PlayerPanel;
-import com.equitycalc.ui.panel.ResultsPanel;
+import com.equitycalc.ui.panel.ControlPanel;
 
 import javax.swing.*;
 import java.awt.*;
 import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.concurrent.ExecutionException;
 
 
 public class EquityCalcGUI extends JFrame {
-    private final MonteCarloSim simulator = new MonteCarloSim();
-    private final List<PlayerPanel> playerPanels = new ArrayList<>();
-    private final JButton runButton = new MacButton("Run Simulation");
-    private final JSpinner iterationsSpinner;
-    private final JProgressBar progressBar;
+    private final MonteCarloSim simulator;
+    private final List<PlayerPanel> playerPanels;
     private final BoardPanel boardPanel;
-    private final ResultsPanel resultsPanel = new ResultsPanel();
-    
+    private final ControlPanel controlPanel;
+    private int simulationBatchSize;
+
     public EquityCalcGUI() {
         super("Poker Equity Calculator");
+        
+        // Initialize all final fields first
+        this.simulator = new MonteCarloSim();
+        this.playerPanels = new ArrayList<>();
+        this.boardPanel = new BoardPanel();
+        this.controlPanel = new ControlPanel();
+        this.simulationBatchSize = 1000;
+
+        // Setup frame properties
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setBackground(new Color(28, 28, 30));
-        getRootPane().putClientProperty("apple.awt.windowAppearance", "dark"); // Enable dark mode
+        getRootPane().putClientProperty("apple.awt.windowAppearance", "dark");
         
-        // Main layout with spacing
-        JPanel contentPane = new JPanel(new BorderLayout(15, 15)); // Increased spacing
+        // Setup content pane
+        JPanel contentPane = new JPanel(new BorderLayout(15, 15));
         contentPane.setBackground(new Color(28, 28, 30));
         contentPane.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
         setContentPane(contentPane);
         
-        // Top container
-        JPanel topContainer = new JPanel(new BorderLayout(10, 15)); // More vertical spacing
+        // Setup top container
+        JPanel topContainer = new JPanel(new BorderLayout(10, 15));
         topContainer.setBackground(new Color(28, 28, 30));
         topContainer.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
+
+        // Configure control panel
+        setupControlPanel();
         
-        // Control panel with run controls
-        JPanel controlPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 0));
-        controlPanel.setBackground(new Color(44, 44, 46));
-        controlPanel.setBorder(BorderFactory.createEmptyBorder(12, 15, 12, 15));
-        
-        // Style iterations spinner
-        iterationsSpinner = new JSpinner(new SpinnerNumberModel(50000, 1000, 1000000, 1000));
-        JSpinner.NumberEditor editor = new JSpinner.NumberEditor(iterationsSpinner, "#,###");
-        iterationsSpinner.setEditor(editor);
-        JFormattedTextField textField = ((JSpinner.DefaultEditor)editor).getTextField();
-        textField.setBackground(new Color(60, 60, 64));
-        textField.setForeground(Color.WHITE);
-        textField.setCaretColor(Color.WHITE);
-        textField.setBorder(BorderFactory.createCompoundBorder(
-            BorderFactory.createLineBorder(new Color(80, 80, 84)),
-            BorderFactory.createEmptyBorder(2, 5, 2, 5)
-        ));
-        
-        JLabel iterationsLabel = new JLabel("Iterations:");
-        iterationsLabel.setForeground(Color.WHITE);
-        iterationsLabel.setFont(new Font("Geist-Semibold", Font.PLAIN, 13));
-        
-        // Add run controls
-        controlPanel.add(iterationsLabel);
-        controlPanel.add(iterationsSpinner);
-        controlPanel.add(Box.createHorizontalStrut(15));
-        controlPanel.add(runButton);
-        
-        // Style progress bar
-        progressBar = new JProgressBar(0, 100);
-        progressBar.setStringPainted(true);
-        progressBar.setVisible(false);
-        progressBar.setBackground(new Color(60, 60, 64));
-        progressBar.setForeground(new Color(0, 122, 255));
-        controlPanel.add(Box.createHorizontalStrut(15));
-        controlPanel.add(progressBar);
-        
-        // Add run button handler
-        runButton.addActionListener(e -> runSimulation());
-        
-        // Board panel with increased height
-        boardPanel = new BoardPanel();
-        boardPanel.setPreferredSize(new Dimension(getWidth(), 150)); // Increased height
-        boardPanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 10, 0)); // Remove title
+        // Configure board panel
+        boardPanel.setPreferredSize(new Dimension(getWidth(), 150));
+        boardPanel.setBorder(BorderFactory.createEmptyBorder(10, 0, 10, 0));
         
         topContainer.add(controlPanel, BorderLayout.NORTH);
         topContainer.add(boardPanel, BorderLayout.CENTER);
         
-        // Players panel
-        JPanel playersMainPanel = new JPanel(new GridLayout(2, 4, 15, 15)); // Increased gaps
+        // Setup players panel
+        setupPlayerPanels(topContainer);
+        
+        setPreferredSize(new Dimension(1000, 800));
+        pack();
+        setLocationRelativeTo(null);
+    }
+
+    private void setupControlPanel() {
+        controlPanel.setSimulationCallback(params -> {
+            try {
+                List<Player> knownPlayers = new ArrayList<>();
+                List<Card> boardCards = boardPanel.getSelectedCards();
+                int randomPlayers = 0;
+                
+                // Collect known players and count random players
+                for (PlayerPanel panel : playerPanels) {
+                    if (panel.isActive()) {
+                        List<Card> cards = panel.getSelectedCards().stream()
+                            .filter(Objects::nonNull)
+                            .collect(Collectors.toList());
+                            
+                        if (cards.size() == 2) {
+                            knownPlayers.add(new Player(cards));
+                        } else {
+                            randomPlayers++; // Count active panels without cards as random players
+                        }
+                    }
+                }
+    
+                simulationBatchSize = params.batchSize;
+    
+                SimulationConfig config = SimulationConfig.builder()
+                    .withKnownPlayers(knownPlayers)
+                    .withRandomPlayers(randomPlayers)
+                    .withBoardCards(boardCards)
+                    .withNumSimulations(params.iterations)
+                    .build();
+                
+                runSimulation(config);
+                
+            } catch (IllegalArgumentException ex) {
+                JOptionPane.showMessageDialog(this,
+                    ex.getMessage(),
+                    "Invalid Input",
+                    JOptionPane.WARNING_MESSAGE);
+                controlPanel.setRunButtonEnabled(true);
+            }
+        });
+    }
+
+    private void setupPlayerPanels(JPanel topContainer) {
+        JPanel playersMainPanel = new JPanel(new GridLayout(2, 4, 15, 15));
         playersMainPanel.setBackground(new Color(28, 28, 30));
         playersMainPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
         
@@ -101,116 +121,103 @@ public class EquityCalcGUI extends JFrame {
         
         add(topContainer, BorderLayout.NORTH);
         add(playersMainPanel, BorderLayout.CENTER);
-        add(resultsPanel, BorderLayout.SOUTH);
-        
-        setPreferredSize(new Dimension(1000, 800));
-        pack();
-        setLocationRelativeTo(null);
     }
-    
-    private void runSimulation() {
-        runButton.setEnabled(false);
+
+    private void runSimulation(SimulationConfig config) {
+        controlPanel.setRunButtonEnabled(false);
         
         try {
-            // Collect and validate player hands
-            List<Player> knownPlayers = new ArrayList<>();
-            int randomPlayers = 0;
+            validateSimulationConfig(config);
             
-            for (PlayerPanel panel : playerPanels) {
-                if (panel.isActive()) {
-                    List<Card> cards = panel.getSelectedCards();
-                    // Filter null cards
-                    cards = cards.stream()
-                        .filter(Objects::nonNull)
-                        .collect(Collectors.toList());
-                        
-                    if (cards.size() == 2) {
-                        knownPlayers.add(new Player(cards));
-                    } else if (cards.isEmpty()) {
-                        randomPlayers++;
-                    } else {
-                        throw new IllegalArgumentException(
-                            "Players must have either 0 cards (random) or exactly 2 cards selected"
-                        );
+            SwingWorker<SimulationResult, Integer> worker = new SwingWorker<>() {
+                @Override
+                protected SimulationResult doInBackground() throws Exception {
+                    controlPanel.startSimulation();
+                    simulator.setProgressCallback(this::setProgress);
+                    simulator.runSimulation(config);
+                    return simulator.getStoredResult(config.getKnownPlayers());
+                }
+                
+                @Override
+                protected void done() {
+                    try {
+                        SimulationResult result = get();
+                        displayResults(result, config.getNumRandomPlayers());
+                        controlPanel.completeSimulation();
+                    } catch (Exception ex) {
+                        handleSimulationError(ex);
+                        controlPanel.failSimulation();
                     }
                 }
-            }
-    
-            final int finalRandomPlayers = randomPlayers;
+            };
             
-            if (knownPlayers.isEmpty() && randomPlayers == 0) {
-                throw new IllegalArgumentException("At least one active player required");
-            }
-            
-            // Get and validate board cards
-            List<Card> boardCards = boardPanel.getSelectedCards();
-            
-            if (!boardCards.isEmpty() && boardCards.size() < 3) {
-                throw new IllegalArgumentException(
-                    "Board must have 0 cards (preflop) or at least 3 cards (flop)"
-                );
-            }
-            
-            // Create simulation config
-            SimulationConfig config = SimulationConfig.builder()
-                .withKnownPlayers(knownPlayers)
-                .withRandomPlayers(finalRandomPlayers)
-                .withBoardCards(boardCards)
-                .withNumSimulations((Integer)iterationsSpinner.getValue())
-                .build();
-                
-            SwingWorker<SimulationResult, Integer> worker = new SwingWorker<>() {
-                    @Override
-                    protected SimulationResult doInBackground() throws Exception {
-                        progressBar.setVisible(true);
-                        simulator.setProgressCallback((Integer progress) -> {
-                            setProgress(progress);
-                        });
-                        simulator.runSimulation(config);
-                        return simulator.getStoredResult(knownPlayers);
-                    }
-                    
-                    @Override
-                    protected void process(List<Integer> chunks) {
-                        if (!chunks.isEmpty()) {
-                            progressBar.setValue(chunks.get(chunks.size() - 1));
-                        }
-                    }
-                    
-                    @Override
-                    protected void done() {
-                        try {
-                            SimulationResult result = get();
-                            displayResults(result, finalRandomPlayers);
-                        } catch (Exception ex) {
-                            JOptionPane.showMessageDialog(EquityCalcGUI.this,
-                                "Error running simulation: " + ex.getMessage(),
-                                "Error", JOptionPane.ERROR_MESSAGE);
-                        }
-                        progressBar.setVisible(false);
-                        runButton.setEnabled(true);
-                    }
-                };
-                
-                worker.addPropertyChangeListener(evt -> {
-                    if ("progress".equals(evt.getPropertyName())) {
-                        progressBar.setValue((Integer)evt.getNewValue());
-                    }
-                });
-                
-                worker.execute();
+            worker.execute();
             
         } catch (IllegalArgumentException ex) {
-            JOptionPane.showMessageDialog(this,
-                ex.getMessage(),
-                "Invalid Input",
-                JOptionPane.WARNING_MESSAGE);
-            runButton.setEnabled(true);
+            handleValidationError(ex);
         }
     }
     
+    private void validateSimulationConfig(SimulationConfig config) {
+        // Validate board state
+        List<Card> boardCards = config.getBoardCards();
+        if (!boardCards.isEmpty() && boardCards.size() < 3) {
+            throw new IllegalArgumentException(
+                "Board must have 0 cards (preflop) or at least 3 cards (flop)"
+            );
+        }
+    
+        // Validate player count
+        if (config.getKnownPlayers().isEmpty() && config.getNumRandomPlayers() == 0) {
+            throw new IllegalArgumentException("At least one active player required");
+        }
+    
+        // Validate known player hands
+        for (Player player : config.getKnownPlayers()) {
+            if (player.getHoleCards().size() != 2) {
+                throw new IllegalArgumentException(
+                    "Each known player must have exactly 2 cards selected"
+                );
+            }
+        }
+    }
+    
+    private void handleSimulationError(Exception ex) {
+        String message = "Error running simulation: " + ex.getMessage();
+        if (ex instanceof InterruptedException) {
+            message = "Simulation was interrupted";
+        } else if (ex instanceof ExecutionException) {
+            message = "Simulation failed: " + ex.getCause().getMessage();
+        }
+        
+        JOptionPane.showMessageDialog(this,
+            message,
+            "Error",
+            JOptionPane.ERROR_MESSAGE);
+    }
+    
+    private void handleValidationError(IllegalArgumentException ex) {
+        JOptionPane.showMessageDialog(this,
+            ex.getMessage(),
+            "Invalid Input",
+            JOptionPane.WARNING_MESSAGE);
+        controlPanel.setRunButtonEnabled(true);
+    }
+    
     private void displayResults(SimulationResult result, int randomPlayers) {
-        resultsPanel.displayResults(result, randomPlayers, playerPanels);
+        int playerIndex = 0;
+        
+        for (int i = 0; i < playerPanels.size(); i++) {
+            PlayerPanel panel = playerPanels.get(i);
+            if (panel.isActive()) {
+                List<Card> cards = panel.getSelectedCards().stream()
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+                    
+                panel.displayResults(result, playerIndex, cards.size() == 2);
+                playerIndex++;
+            }
+        }
     }
     
     class RoundedPanel extends JPanel {
