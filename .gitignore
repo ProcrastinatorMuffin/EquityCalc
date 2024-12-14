@@ -16,3 +16,4 @@ dist/
 *.dat
 poker_lookup.dat
 resources/
+*.DS_Store
