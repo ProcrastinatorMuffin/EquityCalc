@@ -69,8 +69,8 @@ public class CombinationsDialog extends JDialog {
                 CONTAINER_PADDING, CONTAINER_PADDING, 
                 CONTAINER_PADDING, CONTAINER_PADDING));
             
-            HandPanel handPanel = new HandPanel(combo[0], combo[1]);
-            handPanel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            HandPanel handPanel = new HandPanel(combo[0], combo[1], HandPanel.Mode.DISPLAY);
+            cardContainer.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             
             // Center the hand in the container
             JPanel centeringPanel = new JPanel(new GridBagLayout());
@@ -78,7 +78,7 @@ public class CombinationsDialog extends JDialog {
             centeringPanel.add(handPanel);
             cardContainer.add(centeringPanel, BorderLayout.CENTER);
             
-            cardContainer.addMouseListener(new MouseAdapter() {
+            MouseAdapter mouseAdapter = new MouseAdapter() {
                 @Override
                 public void mouseClicked(MouseEvent e) {
                     parentPanel.setCards(combo[0], combo[1]);
@@ -89,15 +89,19 @@ public class CombinationsDialog extends JDialog {
                 public void mouseEntered(MouseEvent e) {
                     cardContainer.setBackground(PANEL_COLOR.brighter());
                     cardContainer.setBorderColor(HIGHLIGHT_COLOR);
+                    handPanel.setHovered(true);
                 }
                 
                 @Override
                 public void mouseExited(MouseEvent e) {
                     cardContainer.setBackground(PANEL_COLOR);
                     cardContainer.setBorderColor(null);
+                    handPanel.setHovered(false);
                 }
-            });
+            };
             
+            cardContainer.addMouseListener(mouseAdapter);
+        
             cardsPanel.add(cardContainer);
         }
         

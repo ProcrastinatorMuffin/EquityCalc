@@ -14,8 +14,16 @@ import java.awt.Graphics2D;
 import java.awt.Container;
 import javax.swing.JPanel;
 import javax.swing.JComponent;
+import javax.swing.JLabel;
+
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.Shape;
+import java.awt.image.BufferedImage;
+import java.awt.Transparency;
+import java.awt.GraphicsConfiguration;
+import java.awt.RenderingHints;
+import java.awt.Font;
 
 public class HandPanel extends JPanel {
     private static final int CARD_WIDTH = 70;
@@ -28,7 +36,7 @@ public class HandPanel extends JPanel {
     private static final Color HOVER_BORDER_COLOR = new Color(100, 100, 255);
     private boolean isHovered = false;
     private static final int PADDING = 2; // Reduced padding
-    
+
     private Card card1;
     private Card card2;
 
@@ -37,13 +45,33 @@ public class HandPanel extends JPanel {
     private static final int CONTENT_HEIGHT = CARD_HEIGHT;
     private static final int TOTAL_VISUAL_WIDTH = CONTENT_WIDTH + (PADDING * 2);
     private static final int TOTAL_VISUAL_HEIGHT = CONTENT_HEIGHT + (PADDING * 2);
+
+    public enum Mode {
+        BUTTON,    // Used in PlayerPanel - clickable, shows hover effects
+        DISPLAY    // Used in CombinationsDialog - no interaction
+    }
+
+    private Mode mode;
     
-    public HandPanel(Card c1, Card c2) {
+    public HandPanel(Card c1, Card c2, Mode mode) {
         this.card1 = c1;
         this.card2 = c2;
+        this.mode = mode;
         setOpaque(false);
         setPreferredSize(new Dimension(TOTAL_VISUAL_WIDTH, TOTAL_VISUAL_HEIGHT));
-        setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        
+        if (mode == Mode.BUTTON) {
+            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            setupButtonBehavior();
+        }
+
+    }
+    
+    public void setCards(Card c1, Card c2) {
+        updateCards(c1, c2);
+    }
+
+    private void setupButtonBehavior() {
         addMouseListener(new MouseAdapter() {
             @Override
             public void mouseEntered(MouseEvent e) {
@@ -64,53 +92,64 @@ public class HandPanel extends JPanel {
         Graphics2D g2 = (Graphics2D) g.create();
         
         // Get opacity from parent PlayerPanel
+        float alphaValue = 1.0f;
         Container parent = getParent();
         while (parent != null && !(parent instanceof PlayerPanel)) {
             parent = parent.getParent();
         }
-        
         if (parent instanceof PlayerPanel) {
             Object alpha = ((JComponent)parent).getClientProperty("alpha");
-            float alphaValue = alpha != null ? ((Number)alpha).floatValue() : 1.0f;
-            g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alphaValue));
+            alphaValue = alpha != null ? ((Number)alpha).floatValue() : 1.0f;
         }
 
-        // Opacity handling remains the same...
-        super.paintComponent(g2);
+        // Create offscreen buffer
+        GraphicsConfiguration gc = g2.getDeviceConfiguration();
+        BufferedImage buffer = gc.createCompatibleImage(
+            getWidth(), 
+            getHeight(), 
+            Transparency.TRANSLUCENT
+        );
+        Graphics2D bufG2 = buffer.createGraphics();
         
         int cardX2 = PADDING + CARD_WIDTH + CARD_SPACING;
         int cardX1 = PADDING;
         int cardY = PADDING;
         
-        // Paint second card
+        // Paint second card (back) first in buffer
         if (card2 != null) {
             currentOtherCard = card1;
-            SimpleCardRenderer.paintCard(g2, card2, cardX2, cardY);
+            SimpleCardRenderer.paintCard(bufG2, card2, cardX2, cardY);
         } else {
-            // Paint empty card background and plus
-            paintEmptyCardBase(g2, cardX2, cardY);
-            // Draw hover border if hovered
-            if (isHovered) {
-                paintHoverBorder(g2, cardX2, cardY);
+            paintEmptyCardBase(bufG2, cardX2, cardY);
+            if (mode == Mode.BUTTON && isHovered) {
+                paintHoverBorder(bufG2, cardX2, cardY);
             } else {
-                paintDashedBorder(g2, cardX2, cardY);
+                paintDashedBorder(bufG2, cardX2, cardY);
             }
         }
         
-        // Paint first card
+        // Paint first card (front) with clipping
+        Shape originalClip = bufG2.getClip();
+        bufG2.clipRect(cardX1, 0, CARD_WIDTH + Math.abs(CARD_SPACING), getHeight());
+        
         if (card1 != null) {
             currentOtherCard = card2;
-            SimpleCardRenderer.paintCard(g2, card1, cardX1, cardY);
+            SimpleCardRenderer.paintCard(bufG2, card1, cardX1, cardY);
         } else {
-            // Paint empty card background and plus
-            paintEmptyCardBase(g2, cardX1, cardY);
-            // Draw hover border if hovered
-            if (isHovered) {
-                paintHoverBorder(g2, cardX1, cardY);
+            paintEmptyCardBase(bufG2, cardX1, cardY);
+            if (mode == Mode.BUTTON && isHovered) {
+                paintHoverBorder(bufG2, cardX1, cardY);
             } else {
-                paintDashedBorder(g2, cardX1, cardY);
+                paintDashedBorder(bufG2, cardX1, cardY);
             }
         }
+        
+        bufG2.setClip(originalClip);
+        bufG2.dispose();
+        
+        // Draw buffer with opacity
+        g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, alphaValue));
+        g2.drawImage(buffer, 0, 0, null);
         
         currentOtherCard = null;
         g2.dispose();
@@ -144,6 +183,11 @@ public class HandPanel extends JPanel {
         g2.setColor(HOVER_BORDER_COLOR);
         g2.setStroke(new BasicStroke(1.5f));
         g2.drawRoundRect(x, y, CARD_WIDTH, CARD_HEIGHT, 16, 16);
+    }
+
+    public void setHovered(boolean hovered) {
+        this.isHovered = hovered;
+        repaint();
     }
 
     public static Card getCurrentOtherCard(Card card) {

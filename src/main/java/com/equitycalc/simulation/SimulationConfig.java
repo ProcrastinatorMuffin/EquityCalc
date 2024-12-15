@@ -2,6 +2,7 @@ package com.equitycalc.simulation;
 
 import com.equitycalc.model.Card;
 import com.equitycalc.model.Player;
+import com.equitycalc.model.Range;
 import java.util.*;
 
 public class SimulationConfig {
@@ -10,6 +11,7 @@ public class SimulationConfig {
     
     private final List<Player> knownPlayers;
     private final int numRandomPlayers;
+    private final List<Range> playerRanges;
     private final List<Card> boardCards;
     private final List<Card> deadCards;
     private final int numSimulations;
@@ -32,6 +34,7 @@ public class SimulationConfig {
 
     private SimulationConfig(Builder builder) {
         this.knownPlayers = Collections.unmodifiableList(new ArrayList<>(builder.knownPlayers));
+        this.playerRanges = Collections.unmodifiableList(new ArrayList<>(builder.playerRanges));
         this.numRandomPlayers = builder.numRandomPlayers;
         this.boardCards = Collections.unmodifiableList(new ArrayList<>(builder.boardCards));
         this.deadCards = Collections.unmodifiableList(new ArrayList<>(builder.deadCards));
@@ -41,6 +44,7 @@ public class SimulationConfig {
 
     public static class Builder {
         private List<Player> knownPlayers = new ArrayList<>();
+        private List<Range> playerRanges = new ArrayList<>(); // New field
         private int numRandomPlayers = 0;
         private List<Card> boardCards = new ArrayList<>();
         private List<Card> deadCards = new ArrayList<>();
@@ -48,6 +52,21 @@ public class SimulationConfig {
 
         public Builder withKnownPlayers(List<Player> players) {
             this.knownPlayers = new ArrayList<>(players);
+            return this;
+        }
+
+        public Builder withPlayerRanges(List<Range> ranges) {
+            this.playerRanges = new ArrayList<>(ranges);
+            return this;
+        }
+
+        public Builder addRange(Range range) {
+            this.playerRanges.add(range);
+            return this;
+        }
+
+        public Builder addRange(String notation) {
+            this.playerRanges.add(Range.parseRange(notation));
             return this;
         }
 
@@ -112,8 +131,8 @@ public class SimulationConfig {
     }
 
     private void validate() {
-        if (knownPlayers.isEmpty()) {
-            throw new IllegalArgumentException("At least one known player is required");
+        if (knownPlayers.isEmpty() && playerRanges.isEmpty()) {
+            throw new IllegalArgumentException("At least one known player or range is required");
         }
 
         if (numRandomPlayers < 0) {
@@ -146,6 +165,10 @@ public class SimulationConfig {
         if (boardCards.stream().anyMatch(deadCards::contains)) {
             throw new IllegalArgumentException("Dead card cannot be on the board");
         }
+    }
+    
+    public List<Range> getPlayerRanges() {
+        return playerRanges;
     }
 
     private void validateNoDuplicateCards() {

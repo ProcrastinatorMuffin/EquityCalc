@@ -18,86 +18,114 @@ public class CardSelector extends JPanel {
     private static final String[] SUITS = {"c", "d", "h", "s"};
     private Card selectedCard = null;
     private static final float HOVER_SCALE = 1.05f;
-    private static final int ANIMATION_DURATION = 150; // ms
+    private static final int ANIMATION_DURATION = 100; // Reduced for snappier feel
+    private static final int ANIMATION_FPS = 144;
+    private static final int ANIMATION_FRAME_TIME = 1000 / ANIMATION_FPS;
+    private static final float SCALE_STEP = 0.004f; // Fixed step size for smoother animation
 
     private static class AnimatedCardPanel extends JPanel {
         private final Timer hoverTimer;
-        public float scale = 1.0f;
+        private float scale = 1.0f;
         private boolean isHovered = false;
         private final String text;
+        private long lastUpdateTime;    
         
         public AnimatedCardPanel(String text) {
             this.text = text;
             setOpaque(false);
+            setDoubleBuffered(true);
             
-            // Create hover animation timer
-            hoverTimer = new Timer(16, e -> { // ~60fps
-                if (isHovered && scale < HOVER_SCALE) {
-                    scale += 0.01f;
-                } else if (!isHovered && scale > 1.0f) {
-                    scale -= 0.01f;
-                } else {
+            hoverTimer = new Timer(ANIMATION_FRAME_TIME, e -> {
+                float targetScale = isHovered ? HOVER_SCALE : 1.0f;
+                
+                // Smooth interpolation
+                if (Math.abs(scale - targetScale) < SCALE_STEP) {
+                    scale = targetScale;
                     ((Timer)e.getSource()).stop();
+                } else {
+                    long currentTime = System.nanoTime();
+                    if (lastUpdateTime > 0) {
+                        float delta = (currentTime - lastUpdateTime) / 1_000_000_000.0f;
+                        float step = SCALE_STEP * (1000.0f / ANIMATION_FRAME_TIME) * delta;
+                        
+                        if (scale < targetScale) {
+                            scale = Math.min(scale + step, targetScale);
+                        } else {
+                            scale = Math.max(scale - step, targetScale);
+                        }
+                    }
+                    lastUpdateTime = currentTime;
                 }
                 repaint();
             });
             
-            // Add mouse listeners
             addMouseListener(new MouseAdapter() {
                 @Override
                 public void mouseEntered(MouseEvent e) {
                     isHovered = true;
-                    hoverTimer.restart();
+                    lastUpdateTime = System.nanoTime();
+                    if (!hoverTimer.isRunning()) {
+                        hoverTimer.restart();
+                    }
                 }
                 
                 @Override
                 public void mouseExited(MouseEvent e) {
                     isHovered = false;
-                    hoverTimer.restart();
+                    lastUpdateTime = System.nanoTime();
+                    if (!hoverTimer.isRunning()) {
+                        hoverTimer.restart();
+                    }
                 }
             });
-        }
+        }      
         
         @Override
         protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
-            Graphics2D g2 = (Graphics2D) g;
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-            
-            // Center the card
-            int w = getWidth();
-            int h = getHeight();
-            int cardW = (int)(70 * scale);
-            int cardH = (int)(95 * scale);
-            int x = (w - cardW) / 2;
-            int y = (h - cardH) / 2;
-            
-            // Draw scaled card
-            g2.translate(x + cardW/2, y + cardH/2);
-            g2.scale(scale, scale);
-            g2.translate(-cardW/2, -cardH/2);
-            
-            // Draw card background with shadow if hovered
-            if (isHovered) {
-                g2.setColor(new Color(0, 0, 0, 30));
-                g2.fillRoundRect(2, 2, cardW, cardH, 16, 16);
-            }
-            
-            g2.setColor(new Color(50, 50, 52));
-            g2.fillRoundRect(0, 0, cardW, cardH, 16, 16);
-            
-            // Draw text
-            g2.setColor(Color.WHITE);
-            g2.setFont(new Font("SF Pro Display", Font.BOLD, 42));
-            FontMetrics fm = g2.getFontMetrics();
-            int textWidth = fm.stringWidth(text);
-            int textHeight = fm.getHeight();
-            g2.drawString(text, 
-                (cardW - textWidth) / 2,
-                (cardH + textHeight) / 2 - fm.getDescent());
+            Graphics2D g2 = (Graphics2D) g.create();
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+                g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
                 
-            // Reset transform
-            g2.setTransform(new AffineTransform());
+                // Center the card
+                int w = getWidth();
+                int h = getHeight();
+                int cardW = (int)(70 * scale);
+                int cardH = (int)(95 * scale);
+                int x = (w - cardW) / 2;
+                int y = (h - cardH) / 2;
+                
+                // Draw scaled card
+                g2.translate(x + cardW/2, y + cardH/2);
+                g2.scale(scale, scale);
+                g2.translate(-cardW/2, -cardH/2);
+                
+                // Draw card background with shadow if hovered
+                if (isHovered) {
+                    g2.setColor(new Color(0, 0, 0, 30));
+                    g2.fillRoundRect(2, 2, cardW, cardH, 16, 16);
+                }
+                
+                g2.setColor(new Color(50, 50, 52));
+                g2.fillRoundRect(0, 0, cardW, cardH, 16, 16);
+                
+                // Draw text
+                g2.setColor(Color.WHITE);
+                g2.setFont(new Font("SF Pro Display", Font.BOLD, 42));
+                FontMetrics fm = g2.getFontMetrics();
+                int textWidth = fm.stringWidth(text);
+                int textHeight = fm.getHeight();
+                g2.drawString(text, 
+                    (cardW - textWidth) / 2,
+                    (cardH + textHeight) / 2 - fm.getDescent());
+                    
+                // Reset transform
+                g2.setTransform(new AffineTransform());
+            }
+            finally {
+                g2.dispose();
+            }
         }
         
         @Override
@@ -110,7 +138,24 @@ public class CardSelector extends JPanel {
         CardSelector selector = new CardSelector();
         
         JDialog rankDialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(parent), title, true);
-        rankDialog.setBackground(new Color(28, 28, 30));
+        rankDialog.setUndecorated(true);
+        rankDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+        
+        // Create responsive content pane
+        JPanel contentPane = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g;
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                super.paintComponent(g);
+            }
+        };
+        contentPane.setLayout(new BorderLayout());
+        rankDialog.setContentPane(contentPane);
+        
+        // Set background with transparency
+        rankDialog.setBackground(new Color(28, 28, 30, 245));
         rankDialog.getRootPane().putClientProperty("apple.awt.windowAppearance", "dark");
         
         // Use FlowLayout for horizontal arrangement
@@ -132,7 +177,7 @@ public class CardSelector extends JPanel {
             mainPanel.add(cardPanel);
         }
         
-        rankDialog.add(mainPanel);
+        contentPane.add(mainPanel, BorderLayout.CENTER);
         rankDialog.pack();
         rankDialog.setLocationRelativeTo(parent);
         rankDialog.setResizable(false);
@@ -143,13 +188,30 @@ public class CardSelector extends JPanel {
     
     private static void showSuitDialog(Component parent, String title, String rank, CardSelector selector) {
         JDialog suitDialog = new JDialog((Frame) SwingUtilities.getWindowAncestor(parent), title, true);
-        suitDialog.setBackground(new Color(28, 28, 30));
+        suitDialog.setUndecorated(true); 
+        suitDialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+
+        
+        // Create responsive content pane
+        JPanel contentPane = new JPanel() {
+            @Override
+            protected void paintComponent(Graphics g) {
+                Graphics2D g2 = (Graphics2D) g;
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                super.paintComponent(g);
+            }
+        };
+        contentPane.setLayout(new BorderLayout());
+        suitDialog.setContentPane(contentPane);
+        
+        // Set background with transparency
+        suitDialog.setBackground(new Color(28, 28, 30, 245));
         suitDialog.getRootPane().putClientProperty("apple.awt.windowAppearance", "dark");
         
         JPanel mainPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 5, 5));
         mainPanel.setBackground(new Color(28, 28, 30));
         mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-        
+
         for (String suit : SUITS) {
             Card card = new Card(rank + suit);
             if (isCardUsed(card, parent)) continue;
@@ -235,7 +297,7 @@ public class CardSelector extends JPanel {
             mainPanel.add(cardPanel);
         }
         
-        suitDialog.add(mainPanel);
+        contentPane.add(mainPanel, BorderLayout.CENTER);
         suitDialog.pack();
         suitDialog.setLocationRelativeTo(parent);
         suitDialog.setResizable(false);

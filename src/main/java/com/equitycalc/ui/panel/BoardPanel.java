@@ -26,40 +26,49 @@ public class BoardPanel extends JPanel {
     private static final float[] DASH_PATTERN = {5.0f, 5.0f};
     
     private final List<Card> boardCards = new ArrayList<>(Arrays.asList(null, null, null, null, null));
+    private static final int ANIMATION_FPS = 144; // Increase from 60 to 144
+    private static final int ANIMATION_FRAME_TIME = 1000 / ANIMATION_FPS;
     private static final float HOVER_SCALE = 1.05f;
-    private static final int ANIMATION_FPS = 60;
+    private static final float SCALE_STEP = 0.004f;
     private final float[] cardScales = new float[5];
     private final javax.swing.Timer hoverTimer;
     private int hoveredIndex = -1;
     private boolean isHoveringFlop = false;
+    private long lastUpdateTime = 0;
 
     public BoardPanel() {
-        // Initialize scales
+        setDoubleBuffered(true); // Enable hardware acceleration
         Arrays.fill(cardScales, 1.0f);
         
-        // Create animation timer
-        hoverTimer = new javax.swing.Timer(1000 / ANIMATION_FPS, e -> {
+        // Improved animation timer
+        hoverTimer = new javax.swing.Timer(ANIMATION_FRAME_TIME, e -> {
             boolean needsRepaint = false;
+            long currentTime = System.nanoTime();
+            float delta = (currentTime - lastUpdateTime) / 1_000_000_000.0f;
+            float step = SCALE_STEP * (1000.0f / ANIMATION_FRAME_TIME) * delta;
             
             for (int i = 0; i < cardScales.length; i++) {
-                float targetScale;
-                if (i < 3) {
-                    targetScale = isHoveringFlop ? HOVER_SCALE : 1.0f;
-                } else {
-                    targetScale = (i == hoveredIndex) ? HOVER_SCALE : 1.0f;
-                }
+                float targetScale = (i < 3 && isHoveringFlop) || (i == hoveredIndex) 
+                    ? HOVER_SCALE : 1.0f;
                 
-                if (Math.abs(cardScales[i] - targetScale) > 0.001f) {
-                    cardScales[i] += (targetScale - cardScales[i]) * 0.2f;
+                if (Math.abs(cardScales[i] - targetScale) < step) {
+                    cardScales[i] = targetScale;
+                } else if (cardScales[i] < targetScale) {
+                    cardScales[i] = Math.min(cardScales[i] + step, targetScale);
+                    needsRepaint = true;
+                } else if (cardScales[i] > targetScale) {
+                    cardScales[i] = Math.max(cardScales[i] - step, targetScale);
                     needsRepaint = true;
                 }
             }
             
+            lastUpdateTime = currentTime;
             if (!needsRepaint) {
                 ((javax.swing.Timer)e.getSource()).stop();
             }
             repaint();
         });
+
         setBackground(BG_COLOR);
         setBorder(BorderFactory.createCompoundBorder(
             BorderFactory.createTitledBorder(null, "Board",
@@ -74,70 +83,10 @@ public class BoardPanel extends JPanel {
             5 * CARD_WIDTH + 4 * CARD_SPACING + FLOP_GROUP_SPACING,
             CARD_HEIGHT + 20)); // Add some padding for the border
             
-            addMouseListener(new MouseAdapter() {
-                @Override
-                public void mouseClicked(MouseEvent e) {
-                    int x = e.getX();
-                    int y = e.getY();
-                    
-                    // Calculate centering positions
-                    int totalCardsWidth = 5 * CARD_WIDTH + 4 * CARD_SPACING + FLOP_GROUP_SPACING;
-                    int startX = (getWidth() - totalCardsWidth) / 2;
-                    int startY = (getHeight() - CARD_HEIGHT) / 2;
-                    
-                    // Adjust coordinates relative to cards start position
-                    x -= startX;
-                    y -= startY;
-                    
-                    // Check if click is within card area
-                    if (y < 0 || y > CARD_HEIGHT) return;
-                    
-                    int cardIndex;
-                    if (x < 3 * (CARD_WIDTH + CARD_SPACING)) {
-                        // Clicked in flop area
-                        cardIndex = x / (CARD_WIDTH + CARD_SPACING);
-                        if (cardIndex < 3) {
-                            showFlopSelector();
-                        }
-                    } else {
-                        // Clicked in turn/river area
-                        x -= 3 * (CARD_WIDTH + CARD_SPACING) + FLOP_GROUP_SPACING - CARD_SPACING;
-                        cardIndex = 3 + (x / (CARD_WIDTH + CARD_SPACING));
-                        if (cardIndex < 5) {
-                            showCardSelector(cardIndex);
-                        }
-                    }
-                }
-
-            @Override
-            public void mouseExited(MouseEvent e) {
-                isHoveringFlop = false;
-                hoveredIndex = -1;
-                hoverTimer.restart();
-            }
-        });
-        
-        setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-
-        // Add mouse motion listener
-        addMouseMotionListener(new MouseMotionAdapter() {
-            @Override
-            public void mouseMoved(MouseEvent e) {
-                updateHoverState(e.getX(), e.getY());
-            }
-        });
         
         addMouseListener(new MouseAdapter() {
             @Override
-            public void mouseExited(MouseEvent e) {
-                isHoveringFlop = false;
-                hoveredIndex = -1;
-                hoverTimer.restart();
-            }
-            
-            @Override
             public void mouseClicked(MouseEvent e) {
-                // Keep existing click handler code
                 int x = e.getX();
                 int y = e.getY();
                 
@@ -163,7 +112,22 @@ public class BoardPanel extends JPanel {
                     }
                 }
             }
+            
+            @Override
+            public void mouseExited(MouseEvent e) {
+                isHoveringFlop = false;
+                hoveredIndex = -1;
+                hoverTimer.restart();
+            }
+        });    
+
+        addMouseMotionListener(new MouseMotionAdapter() {
+            @Override
+            public void mouseMoved(MouseEvent e) {
+                updateHoverState(e.getX(), e.getY());
+            }
         });
+        
     }
 
     private void updateHoverState(int mouseX, int mouseY) {
@@ -173,22 +137,29 @@ public class BoardPanel extends JPanel {
         
         mouseX -= startX;
         mouseY -= startY;
+
+        boolean changed = false;
+        boolean newHoveringFlop = false;
+        int newHoveredIndex = -1;
         
         if (mouseY >= 0 && mouseY <= CARD_HEIGHT) {
             if (mouseX < 3 * (CARD_WIDTH + CARD_SPACING)) {
-                isHoveringFlop = true;
-                hoveredIndex = -1;
+                newHoveringFlop = true;
             } else {
                 mouseX -= 3 * (CARD_WIDTH + CARD_SPACING) + FLOP_GROUP_SPACING - CARD_SPACING;
                 int index = 3 + (mouseX / (CARD_WIDTH + CARD_SPACING));
-                isHoveringFlop = false;
-                hoveredIndex = (index < 5 && mouseX >= 0) ? index : -1;
+                if (index < 5 && mouseX >= 0) newHoveredIndex = index;
             }
-        } else {
-            isHoveringFlop = false;
-            hoveredIndex = -1;
         }
-        hoverTimer.restart();
+        
+        if (newHoveringFlop != isHoveringFlop || newHoveredIndex != hoveredIndex) {
+            isHoveringFlop = newHoveringFlop;
+            hoveredIndex = newHoveredIndex;
+            lastUpdateTime = System.nanoTime();
+            if (!hoverTimer.isRunning()) {
+                hoverTimer.restart();
+            }
+        }
     }
     
     private void paintEmptyCard(Graphics2D g2, int x, int y) {
@@ -275,27 +246,28 @@ public class BoardPanel extends JPanel {
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         Graphics2D g2 = (Graphics2D) g;
+        
+        // Enable better rendering
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g2.setRenderingHint(RenderingHints.KEY_STROKE_CONTROL, RenderingHints.VALUE_STROKE_PURE);
         
         int totalCardsWidth = 5 * CARD_WIDTH + 4 * CARD_SPACING + FLOP_GROUP_SPACING;
         int startX = (getWidth() - totalCardsWidth) / 2;
         int startY = (getHeight() - CARD_HEIGHT) / 2;
         
+        // Create a single transform instance to reuse
+        AffineTransform originalTransform = g2.getTransform();
+        
         for (int i = 0; i < boardCards.size(); i++) {
-            AffineTransform originalTransform = g2.getTransform();
-            
             int x = startX + i * (CARD_WIDTH + CARD_SPACING);
-            if (i >= 3) {
-                x += FLOP_GROUP_SPACING - CARD_SPACING;
-            }
+            if (i >= 3) x += FLOP_GROUP_SPACING - CARD_SPACING;
             
-            // Apply scale transform
+            // Optimized scale transform
             if (cardScales[i] != 1.0f) {
-                int centerX = x + CARD_WIDTH / 2;
-                int centerY = startY + CARD_HEIGHT / 2;
-                g2.translate(centerX, centerY);
+                g2.translate(x + CARD_WIDTH/2, startY + CARD_HEIGHT/2);
                 g2.scale(cardScales[i], cardScales[i]);
-                g2.translate(-centerX, -centerY);
+                g2.translate(-(x + CARD_WIDTH/2), -(startY + CARD_HEIGHT/2));
             }
             
             Card card = boardCards.get(i);

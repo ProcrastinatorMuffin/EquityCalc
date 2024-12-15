@@ -25,6 +25,35 @@ public class RangeMatrixDialog extends JDialog {
     private static final int SPACING = 2; // Minimal spacing
     private static final Font MATRIX_FONT = new Font("Geist-Semibold", Font.PLAIN, 18); // Larger mono font
     
+    @FunctionalInterface
+    public interface RangeSelectionCallback {
+        void onRangeSelected(Card.Rank rank1, Card.Rank rank2, boolean suited);
+    }
+
+    private JPanel createMatrixPanel() {
+        return createMatrixPanel(null);
+    }
+
+    public RangeMatrixDialog(JFrame parent, RangeSelectionCallback callback) {
+        super(parent, "Select Hand Range", true);
+        this.parentPanel = null;
+        
+        setBackground(BG_COLOR);
+        getRootPane().putClientProperty("apple.awt.windowAppearance", "dark");
+        
+        JPanel mainContainer = new JPanel(new BorderLayout(SPACING, SPACING));
+        mainContainer.setBackground(BG_COLOR);
+        mainContainer.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
+        
+        JPanel matrixPanel = createMatrixPanel(callback);
+        mainContainer.add(matrixPanel, BorderLayout.CENTER);
+        
+        add(mainContainer);
+        pack();
+        setLocationRelativeTo(parent);
+        setResizable(true);
+    }
+
     public RangeMatrixDialog(JFrame parent, PlayerPanel playerPanel) {
         super(parent, "Select Hand Range", true);
         this.parentPanel = playerPanel;
@@ -45,14 +74,16 @@ public class RangeMatrixDialog extends JDialog {
         setResizable(true);
     }
     
-    private JPanel createMatrixPanel() {
+    private JPanel createMatrixPanel(RangeSelectionCallback callback) {
         JPanel panel = new JPanel(new GridLayout(13, 13, SPACING, SPACING));
         panel.setBackground(BG_COLOR);
         String[] ranks = {"A", "K", "Q", "J", "T", "9", "8", "7", "6", "5", "4", "3", "2"};
         
         for (int i = 0; i < ranks.length; i++) {
             for (int j = 0; j < ranks.length; j++) {
-                String text = ranks[i] + ranks[j];
+                final String rank1 = ranks[i];  // Make final for lambda
+                final String rank2 = ranks[j];  // Make final for lambda
+                String text = rank1 + rank2;
                 boolean isPair = i == j;
                 boolean isSuited = i < j;
                 
@@ -62,25 +93,39 @@ public class RangeMatrixDialog extends JDialog {
                 JButton button;
                 
                 // Determine if this is a corner tile
-                if (i == 0 && j == 0) { // Top left
+                if (i == 0 && j == 0) {
                     button = new CornerButton(text, CornerButton.Corner.TOP_LEFT);
-                } else if (i == 0 && j == ranks.length-1) { // Top right
+                } else if (i == 0 && j == ranks.length-1) {
                     button = new CornerButton(text, CornerButton.Corner.TOP_RIGHT);
-                } else if (i == ranks.length-1 && j == 0) { // Bottom left
+                } else if (i == ranks.length-1 && j == 0) {
                     button = new CornerButton(text, CornerButton.Corner.BOTTOM_LEFT);
-                } else if (i == ranks.length-1 && j == ranks.length-1) { // Bottom right
+                } else if (i == ranks.length-1 && j == ranks.length-1) {
                     button = new CornerButton(text, CornerButton.Corner.BOTTOM_RIGHT);
                 } else {
                     button = new SquareButton(text);
                 }
+
+                // Final variables for lambda capture
+                final boolean finalIsSuited = isSuited;
                 
-                styleButton(button, text, ranks[i], ranks[j], isPair, isSuited);
+                button.addActionListener(e -> {
+                    if (callback != null) {
+                        Card.Rank r1 = Card.Rank.fromSymbol(rank1.charAt(0));
+                        Card.Rank r2 = Card.Rank.fromSymbol(rank2.charAt(0));
+                        callback.onRangeSelected(r1, r2, finalIsSuited);
+                    } else {
+                        showCombinations(rank1, rank2, finalIsSuited);
+                    }
+                });
+                
+                styleButton(button, text, rank1, rank2, isPair, finalIsSuited);
                 panel.add(button);
             }
         }
         return panel;
     }
 
+    // Update styleButton to avoid duplicate action listener
     private void styleButton(JButton button, String text, String rank1, String rank2, 
                            boolean isPair, boolean isSuited) {
         button.setFont(MATRIX_FONT);
@@ -108,8 +153,6 @@ public class RangeMatrixDialog extends JDialog {
                 button.setBorderPainted(false);
             }
         });
-        
-        button.addActionListener(e -> showCombinations(rank1, rank2, isSuited));
     }
 
     private Color brighten(Color color) {

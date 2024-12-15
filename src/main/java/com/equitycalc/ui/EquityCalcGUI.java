@@ -87,13 +87,13 @@ public class EquityCalcGUI extends JFrame {
                     }
                 }
     
-                simulationBatchSize = params.batchSize;
+                simulationBatchSize = 1000; // Set fixed batch size
     
                 SimulationConfig config = SimulationConfig.builder()
                     .withKnownPlayers(knownPlayers)
                     .withRandomPlayers(randomPlayers)
                     .withBoardCards(boardCards)
-                    .withNumSimulations(params.iterations)
+                    .withNumSimulations(params.iterations)  // Use params.iterations directly
                     .build();
                 
                 runSimulation(config);
@@ -113,8 +113,14 @@ public class EquityCalcGUI extends JFrame {
         playersMainPanel.setBackground(new Color(28, 28, 30));
         playersMainPanel.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 0));
         
-        for (int i = 0; i < 4; i++) {
-            PlayerPanel playerPanel = new PlayerPanel("Player " + (i + 1));
+        // Create Hero panel first
+        PlayerPanel heroPanel = new PlayerPanel("Hero", true);
+        playerPanels.add(heroPanel);
+        playersMainPanel.add(heroPanel);
+        
+        // Create remaining villain panels
+        for (int i = 2; i < 5; i++) {
+            PlayerPanel playerPanel = new PlayerPanel("Player " + (i + 1), false);
             playerPanels.add(playerPanel);
             playersMainPanel.add(playerPanel);
         }
@@ -167,8 +173,9 @@ public class EquityCalcGUI extends JFrame {
             );
         }
     
-        // Validate player count
-        if (config.getKnownPlayers().isEmpty() && config.getNumRandomPlayers() == 0) {
+        // Validate total player count
+        int totalPlayers = config.getKnownPlayers().size() + config.getNumRandomPlayers();
+        if (totalPlayers == 0) {
             throw new IllegalArgumentException("At least one active player required");
         }
     

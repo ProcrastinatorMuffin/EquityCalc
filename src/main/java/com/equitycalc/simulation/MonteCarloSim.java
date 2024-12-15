@@ -147,8 +147,8 @@ public class MonteCarloSim {
         
         // Remove all known cards from deck
         Set<Card> usedCards = new HashSet<>();
-        usedCards.addAll(config.getBoardCards());    // Known board cards
-        usedCards.addAll(config.getDeadCards());     // Dead cards
+        usedCards.addAll(config.getBoardCards());    
+        usedCards.addAll(config.getDeadCards());     
         
         // Remove known player hole cards
         for (Player player : config.getKnownPlayers()) {
@@ -161,14 +161,30 @@ public class MonteCarloSim {
         deck.shuffle();
         PerformanceLogger.logOperation("DeckShuffle", shuffleTime);
         
-        // Deal random hole cards for unknown players
-        long randomPlayersTime = System.nanoTime();
+        // Deal hands for range-based players
         List<Player> allPlayers = new ArrayList<>(config.getKnownPlayers());
+        for (Range range : config.getPlayerRanges()) {
+            List<Card[]> possibleHands = range.getPossibleHands();
+            // Filter out hands with cards that are already used
+            possibleHands.removeIf(hand -> 
+                usedCards.contains(hand[0]) || usedCards.contains(hand[1]));
+            
+            if (possibleHands.isEmpty()) {
+                throw new IllegalStateException("No valid hands available in range");
+            }
+            
+            // Pick random hand from remaining possibilities
+            Card[] randomHand = possibleHands.get(new Random().nextInt(possibleHands.size()));
+            Player rangePlayer = new Player(Arrays.asList(randomHand));
+            allPlayers.add(rangePlayer);
+            usedCards.addAll(Arrays.asList(randomHand));
+        }
+        
+        // Deal random hands for remaining players
         for (int i = 0; i < config.getNumRandomPlayers(); i++) {
             List<Card> randomHoleCards = deck.dealCards(2);
             allPlayers.add(new Player(randomHoleCards));
         }
-        PerformanceLogger.logOperation("RandomPlayers", randomPlayersTime);
         
         // Complete the board if needed
         long dealTime = System.nanoTime();
