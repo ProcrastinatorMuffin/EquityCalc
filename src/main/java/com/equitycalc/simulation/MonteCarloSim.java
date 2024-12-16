@@ -82,12 +82,18 @@ public class MonteCarloSim {
     public void runSimulation(SimulationConfig config) throws InterruptedException, ExecutionException {
         long startTime = System.nanoTime();
         
-        int totalPlayers = config.getKnownPlayers().size() + config.getNumRandomPlayers();
+        // Calculate total players correctly
+        int totalPlayers = config.getKnownPlayers().size() + 
+                        config.getPlayerRanges().size() + 
+                        config.getNumRandomPlayers();
+                        
         if (totalPlayers > MAX_PLAYERS) {
             throw new IllegalArgumentException("Maximum " + MAX_PLAYERS + " players allowed");
         }
         
+        // Initialize result with correct number of players
         SimulationResult result = new SimulationResult(totalPlayers);
+        
         ProgressTracker progress = new ProgressTracker(config.getNumSimulations(), config);
         
         for (int i = 0; i < config.getNumSimulations(); i++) {
@@ -154,6 +160,11 @@ public class MonteCarloSim {
         for (Player player : config.getKnownPlayers()) {
             usedCards.addAll(player.getHoleCards());
         }
+        
+        // Create available cards set for range hands
+        Set<Card> availableCards = new HashSet<>(deck.cards);
+        availableCards.removeAll(usedCards);
+        
         deck.cards.removeAll(usedCards);
         PerformanceLogger.logOperation("DeckPreparation", deckPrepTime);
         
@@ -163,21 +174,43 @@ public class MonteCarloSim {
         
         // Deal hands for range-based players
         List<Player> allPlayers = new ArrayList<>(config.getKnownPlayers());
+        
+        // Get all range-based hands first
+        List<List<Card[]>> allRangeHands = new ArrayList<>();
         for (Range range : config.getPlayerRanges()) {
-            List<Card[]> possibleHands = range.getPossibleHands();
-            // Filter out hands with cards that are already used
+            // Filter hands against currently available cards
+            List<Card[]> possibleHands = range.getPossibleHands().stream()
+                .filter(hand -> availableCards.contains(hand[0]) && availableCards.contains(hand[1]))
+                .collect(Collectors.toList());
+                
+            allRangeHands.add(possibleHands);
+        }
+        
+        // Deal hands for range players one at a time
+        for (int i = 0; i < config.getPlayerRanges().size(); i++) {
+            List<Card[]> possibleHands = allRangeHands.get(i);
+            
+            // Remove hands containing used cards
             possibleHands.removeIf(hand -> 
-                usedCards.contains(hand[0]) || usedCards.contains(hand[1]));
+                !availableCards.contains(hand[0]) || !availableCards.contains(hand[1]));
             
             if (possibleHands.isEmpty()) {
-                throw new IllegalStateException("No valid hands available in range");
+                throw new IllegalStateException(
+                    String.format("No valid hands available in range for player %d (Available cards: %d)", 
+                        i + 1, availableCards.size())
+                );
             }
             
             // Pick random hand from remaining possibilities
             Card[] randomHand = possibleHands.get(new Random().nextInt(possibleHands.size()));
             Player rangePlayer = new Player(Arrays.asList(randomHand));
             allPlayers.add(rangePlayer);
-            usedCards.addAll(Arrays.asList(randomHand));
+            
+            // Update available cards and deck
+            availableCards.remove(randomHand[0]);
+            availableCards.remove(randomHand[1]);
+            deck.cards.remove(randomHand[0]);
+            deck.cards.remove(randomHand[1]);
         }
         
         // Deal random hands for remaining players

@@ -69,36 +69,55 @@ public class EquityCalcGUI extends JFrame {
         controlPanel.setSimulationCallback(params -> {
             try {
                 List<Player> knownPlayers = new ArrayList<>();
+                List<Range> playerRanges = new ArrayList<>();
                 List<Card> boardCards = boardPanel.getSelectedCards();
                 int randomPlayers = 0;
                 
-                // Collect known players and count random players
+                // Debug logging
+                System.out.println("Starting simulation setup:");
+                
                 for (PlayerPanel panel : playerPanels) {
                     if (panel.isActive()) {
+                        System.out.println("Checking active player panel");
+                        
                         List<Card> cards = panel.getSelectedCards().stream()
                             .filter(Objects::nonNull)
                             .collect(Collectors.toList());
                             
                         if (cards.size() == 2) {
+                            System.out.println("Adding known player with cards: " + cards);
                             knownPlayers.add(new Player(cards));
                         } else {
-                            randomPlayers++; // Count active panels without cards as random players
+                            Range range = panel.getRange();
+                            if (range != null && !range.getPossibleHands().isEmpty()) {
+                                System.out.println("Adding player with range: " + 
+                                    range.getPossibleHands().size() + " possible hands");
+                                playerRanges.add(range);
+                            } else {
+                                System.out.println("Counting as random player");
+                                randomPlayers++;
+                            }
                         }
                     }
                 }
     
-                simulationBatchSize = 1000; // Set fixed batch size
+                System.out.println("Configuration summary:");
+                System.out.println("Known players: " + knownPlayers.size());
+                System.out.println("Range players: " + playerRanges.size());
+                System.out.println("Random players: " + randomPlayers);
     
                 SimulationConfig config = SimulationConfig.builder()
                     .withKnownPlayers(knownPlayers)
+                    .withPlayerRanges(playerRanges)
                     .withRandomPlayers(randomPlayers)
                     .withBoardCards(boardCards)
-                    .withNumSimulations(params.iterations)  // Use params.iterations directly
+                    .withNumSimulations(params.iterations)
                     .build();
                 
                 runSimulation(config);
                 
             } catch (IllegalArgumentException ex) {
+                System.err.println("Validation error: " + ex.getMessage());
                 JOptionPane.showMessageDialog(this,
                     ex.getMessage(),
                     "Invalid Input",
@@ -173,8 +192,10 @@ public class EquityCalcGUI extends JFrame {
             );
         }
     
-        // Validate total player count
-        int totalPlayers = config.getKnownPlayers().size() + config.getNumRandomPlayers();
+        // Validate total player count including range-based players
+        int totalPlayers = config.getKnownPlayers().size() + 
+                          config.getPlayerRanges().size() + 
+                          config.getNumRandomPlayers();
         if (totalPlayers == 0) {
             throw new IllegalArgumentException("At least one active player required");
         }
@@ -184,6 +205,15 @@ public class EquityCalcGUI extends JFrame {
             if (player.getHoleCards().size() != 2) {
                 throw new IllegalArgumentException(
                     "Each known player must have exactly 2 cards selected"
+                );
+            }
+        }
+    
+        // Validate ranges are not empty
+        for (Range range : config.getPlayerRanges()) {
+            if (range == null || range.getPossibleHands().isEmpty()) {
+                throw new IllegalArgumentException(
+                    "Player ranges must not be empty"
                 );
             }
         }

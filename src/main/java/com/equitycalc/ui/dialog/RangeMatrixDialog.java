@@ -4,16 +4,28 @@ import com.equitycalc.model.Card;
 import com.equitycalc.ui.components.button.CornerButton;
 import com.equitycalc.ui.components.button.SquareButton;
 import com.equitycalc.ui.panel.PlayerPanel;
+import com.equitycalc.model.Range;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.function.Consumer;
 
 public class RangeMatrixDialog extends JDialog {
     private final PlayerPanel parentPanel;
+    public enum Mode {
+        COMBINATIONS,  // Standard mode showing combinations
+        RANGE         // Range selection mode
+    }
+
+    private final Mode mode;
+    private final Set<JButton> selectedButtons = new HashSet<>();
+    private final JButton saveButton;
 
     private static final Color BG_COLOR = new Color(28, 28, 30);
     // More muted colors
@@ -34,29 +46,11 @@ public class RangeMatrixDialog extends JDialog {
         return createMatrixPanel(null);
     }
 
-    public RangeMatrixDialog(JFrame parent, RangeSelectionCallback callback) {
-        super(parent, "Select Hand Range", true);
-        this.parentPanel = null;
-        
-        setBackground(BG_COLOR);
-        getRootPane().putClientProperty("apple.awt.windowAppearance", "dark");
-        
-        JPanel mainContainer = new JPanel(new BorderLayout(SPACING, SPACING));
-        mainContainer.setBackground(BG_COLOR);
-        mainContainer.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
-        
-        JPanel matrixPanel = createMatrixPanel(callback);
-        mainContainer.add(matrixPanel, BorderLayout.CENTER);
-        
-        add(mainContainer);
-        pack();
-        setLocationRelativeTo(parent);
-        setResizable(true);
-    }
-
     public RangeMatrixDialog(JFrame parent, PlayerPanel playerPanel) {
         super(parent, "Select Hand Range", true);
         this.parentPanel = playerPanel;
+        this.mode = Mode.COMBINATIONS; 
+        this.saveButton = null;
         
         setBackground(BG_COLOR);
         getRootPane().putClientProperty("apple.awt.windowAppearance", "dark");
@@ -73,16 +67,51 @@ public class RangeMatrixDialog extends JDialog {
         setLocationRelativeTo(parent);
         setResizable(true);
     }
+
+    public RangeMatrixDialog(JFrame parent, Consumer<Range> rangeCallback) {
+        super(parent, "Select Hand Range", true);
+        this.mode = Mode.RANGE;
+        this.parentPanel = null;
+        
+        setBackground(BG_COLOR);
+        getRootPane().putClientProperty("apple.awt.windowAppearance", "dark");
+        
+        JPanel mainContainer = new JPanel(new BorderLayout(SPACING, SPACING));
+        mainContainer.setBackground(BG_COLOR);
+        mainContainer.setBorder(BorderFactory.createEmptyBorder(16, 16, 16, 16));
+        
+        JPanel matrixPanel = createMatrixPanel(null);
+        mainContainer.add(matrixPanel, BorderLayout.CENTER);
+        
+        // Add save button
+        saveButton = new JButton("Save Range");
+        saveButton.setFont(MATRIX_FONT);
+        saveButton.addActionListener(e -> {
+            Range range = buildRangeFromSelection();
+            rangeCallback.accept(range);
+            dispose();
+        });
+        
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        buttonPanel.setBackground(BG_COLOR);
+        buttonPanel.add(saveButton);
+        mainContainer.add(buttonPanel, BorderLayout.SOUTH);
+        
+        add(mainContainer);
+        pack();
+        setLocationRelativeTo(parent);
+        setResizable(true);
+    }
     
     private JPanel createMatrixPanel(RangeSelectionCallback callback) {
         JPanel panel = new JPanel(new GridLayout(13, 13, SPACING, SPACING));
-        panel.setBackground(BG_COLOR);
+        panel.setBackground(BG_COLOR); 
         String[] ranks = {"A", "K", "Q", "J", "T", "9", "8", "7", "6", "5", "4", "3", "2"};
         
         for (int i = 0; i < ranks.length; i++) {
             for (int j = 0; j < ranks.length; j++) {
-                final String rank1 = ranks[i];  // Make final for lambda
-                final String rank2 = ranks[j];  // Make final for lambda
+                final String rank1 = ranks[i];
+                final String rank2 = ranks[j];
                 String text = rank1 + rank2;
                 boolean isPair = i == j;
                 boolean isSuited = i < j;
@@ -92,7 +121,7 @@ public class RangeMatrixDialog extends JDialog {
                 
                 JButton button;
                 
-                // Determine if this is a corner tile
+                // Create button with appropriate corner style
                 if (i == 0 && j == 0) {
                     button = new CornerButton(text, CornerButton.Corner.TOP_LEFT);
                 } else if (i == 0 && j == ranks.length-1) {
@@ -104,28 +133,45 @@ public class RangeMatrixDialog extends JDialog {
                 } else {
                     button = new SquareButton(text);
                 }
-
-                // Final variables for lambda capture
+    
                 final boolean finalIsSuited = isSuited;
                 
-                button.addActionListener(e -> {
-                    if (callback != null) {
+                // Handle clicks based on mode
+                if (mode == Mode.RANGE) {
+                    button.addActionListener(e -> {
                         Card.Rank r1 = Card.Rank.fromSymbol(rank1.charAt(0));
                         Card.Rank r2 = Card.Rank.fromSymbol(rank2.charAt(0));
-                        callback.onRangeSelected(r1, r2, finalIsSuited);
-                    } else {
-                        showCombinations(rank1, rank2, finalIsSuited);
-                    }
-                });
-                
+                        
+                        if (selectedButtons.contains(button)) {
+                            selectedButtons.remove(button);
+                            button.setBackground(isPair ? BTN_PAIRS : 
+                                              finalIsSuited ? BTN_SUITED : BTN_OFFSUIT);
+                        } else {
+                            selectedButtons.add(button);
+                            button.setBackground(brighten(isPair ? BTN_PAIRS : 
+                                              finalIsSuited ? BTN_SUITED : BTN_OFFSUIT));
+                        }
+                    });
+                } else { // COMBINATIONS mode
+                    button.addActionListener(e -> {
+                        if (callback != null) {
+                            Card.Rank r1 = Card.Rank.fromSymbol(rank1.charAt(0));
+                            Card.Rank r2 = Card.Rank.fromSymbol(rank2.charAt(0));
+                            callback.onRangeSelected(r1, r2, finalIsSuited);
+                        } else {
+                            showCombinations(rank1, rank2, finalIsSuited);
+                        }
+                    });
+                }
+    
                 styleButton(button, text, rank1, rank2, isPair, finalIsSuited);
                 panel.add(button);
             }
         }
         return panel;
     }
-
-    // Update styleButton to avoid duplicate action listener
+    
+    // Update styleButton to remove duplicate action listener
     private void styleButton(JButton button, String text, String rank1, String rank2, 
                            boolean isPair, boolean isSuited) {
         button.setFont(MATRIX_FONT);
@@ -142,17 +188,46 @@ public class RangeMatrixDialog extends JDialog {
         button.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseEntered(MouseEvent e) {
-                button.setBackground(brighten(baseColor));
-                button.setBorder(BorderFactory.createLineBorder(HIGHLIGHT_BORDER, 1));
-                button.setBorderPainted(true);
+                if (!selectedButtons.contains(button)) {
+                    button.setBackground(brighten(baseColor));
+                    button.setBorder(BorderFactory.createLineBorder(HIGHLIGHT_BORDER, 1));
+                    button.setBorderPainted(true);
+                }
             }
             
             @Override
             public void mouseExited(MouseEvent e) {
-                button.setBackground(baseColor);
-                button.setBorderPainted(false);
+                if (!selectedButtons.contains(button)) {
+                    button.setBackground(baseColor);
+                    button.setBorderPainted(false);
+                }
             }
         });
+    }
+
+    private Range buildRangeFromSelection() {
+        Range range = new Range();
+        
+        for (JButton button : selectedButtons) {
+            String text = button.getText();
+            char rank1 = text.charAt(0);
+            char rank2 = text.charAt(1);
+            boolean suited = text.endsWith("s");
+            
+            // Convert ranks to enum for comparison
+            Card.Rank r1 = Card.Rank.fromSymbol(rank1);
+            Card.Rank r2 = Card.Rank.fromSymbol(rank2);
+            
+            // For pairs, order doesn't matter but keep consistent
+            if (r1 == r2) {
+                range.addHand(r1, r2, false); // Pairs are never suited
+            } else {
+                // For non-pairs, maintain matrix order which is already consistent
+                range.addHand(r1, r2, suited);
+            }
+        }
+        
+        return range;
     }
 
     private Color brighten(Color color) {
